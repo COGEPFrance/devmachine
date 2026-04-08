@@ -1,0 +1,5 @@
+devs:
+  hosts:
+    pc_xxx:
+      ansible_host: 10.0.0.104
+      ansible_user: skit

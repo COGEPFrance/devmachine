@@ -1,0 +1,30 @@
+- name: Install PyCharm
+  hosts: devs
+  become: true
+  vars:
+    pycharm_snap_name: pycharm
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check PyCharm snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ pycharm_snap_name }}"
+      register: pycharm_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install PyCharm snap
+      ansible.builtin.command:
+        cmd: "snap install {{ pycharm_snap_name }} --classic"
+      changed_when: true
+      when: pycharm_snap.rc != 0
