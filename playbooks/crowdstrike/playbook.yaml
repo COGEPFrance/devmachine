@@ -1,0 +1,45 @@
+- name: Install CrowdStrike Falcon Sensor
+  hosts: devs
+  become: true
+  vars:
+    falcon_sensor_url: "XXX"
+    falcon_sensor_deb_name: "falcon-sensor_7.34.0-18708_amd64.deb"
+    falcon_sensor_deb_path: "/tmp/{{ falcon_sensor_deb_name }}"
+    falcon_cid: "d1823c556234466ab01b47a7e6c06f2d-DB"
+    falcon_provisioning_token: "A37C0956"
+  tasks:
+    - name: Download Falcon Sensor package
+      ansible.builtin.get_url:
+        url: "{{ falcon_sensor_url }}"
+        dest: "{{ falcon_sensor_deb_path }}"
+        mode: "0644"
+
+    - name: Install Falcon Sensor package
+      ansible.builtin.apt:
+        deb: "{{ falcon_sensor_deb_path }}"
+
+    - name: Configure Falcon Sensor CID and provisioning token
+      ansible.builtin.command:
+        argv:
+          - /opt/CrowdStrike/falconctl
+          - -s
+          - --cid={{ falcon_cid }}
+          - --provisioning-token={{ falcon_provisioning_token }}
+      register: falconctl_config
+      changed_when: falconctl_config.rc == 0
+      no_log: true
+
+    - name: Start Falcon Sensor service
+      ansible.builtin.systemd:
+        name: falcon-sensor
+        state: started
+
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert Falcon Sensor service is running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services.get('falcon-sensor.service', {}).state == 'running'
+        fail_msg: "falcon-sensor.service is not running"
+        success_msg: "falcon-sensor.service is running"

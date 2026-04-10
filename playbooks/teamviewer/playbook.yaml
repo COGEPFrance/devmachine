@@ -1,0 +1,33 @@
+- name: Install TeamViewer
+  hosts: devs
+  become: true
+  vars:
+    teamviewer_download_url: "XXX"
+    teamviewer_deb_name: "teamviewer_amd64.deb"
+    teamviewer_deb_path: "/tmp/{{ teamviewer_deb_name }}"
+  tasks:
+    - name: Download TeamViewer package
+      ansible.builtin.get_url:
+        url: "{{ teamviewer_download_url }}"
+        dest: "{{ teamviewer_deb_path }}"
+        mode: "0644"
+
+    - name: Install TeamViewer package
+      ansible.builtin.apt:
+        deb: "{{ teamviewer_deb_path }}"
+
+    - name: Start TeamViewer service
+      ansible.builtin.systemd:
+        name: teamviewerd
+        state: started
+        enabled: true
+
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert TeamViewer service is running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services.get('teamviewerd.service', {}).state == 'running'
+        fail_msg: "teamviewerd.service is not running"
+        success_msg: "teamviewerd.service is running"
