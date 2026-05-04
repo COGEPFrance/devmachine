@@ -1,5 +1,5 @@
 devs:
   hosts:
     pcl007:
-      ansible_host: 10.0.0.104
-      ansible_user: skit
+      ansible_host: 10.0.0.38
+      ansible_user: bigboss

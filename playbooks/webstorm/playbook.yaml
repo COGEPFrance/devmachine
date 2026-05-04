@@ -1,0 +1,31 @@
+- name: Install WebStorm
+  hosts: devs
+  become: true
+  vars:
+    webstorm_snap_name: webstorm
+
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check WebStorm snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ webstorm_snap_name }}"
+      register: webstorm_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install WebStorm snap
+      ansible.builtin.command:
+        cmd: "snap install {{ webstorm_snap_name }} --classic"
+      changed_when: true
+      when: webstorm_snap.rc != 0

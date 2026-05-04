@@ -1,0 +1,69 @@
+- name: Install Visual Studio Code
+  hosts: devs
+  become: true
+  vars:
+    microsoft_key_url: "https://packages.microsoft.com/keys/microsoft.asc"
+    microsoft_key_tmp_path: "/tmp/microsoft.asc"
+    microsoft_keyring_path: "/usr/share/keyrings/microsoft.gpg"
+    vscode_sources_path: "/etc/apt/sources.list.d/vscode.sources"
+
+  tasks:
+    - name: Install repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - gpg
+          - wget
+        state: present
+        update_cache: true
+
+    - name: Download Microsoft signing key
+      ansible.builtin.get_url:
+        url: "{{ microsoft_key_url }}"
+        dest: "{{ microsoft_key_tmp_path }}"
+        mode: "0644"
+
+    - name: Install Microsoft keyring
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - "{{ microsoft_keyring_path }}"
+          - "{{ microsoft_key_tmp_path }}"
+        creates: "{{ microsoft_keyring_path }}"
+
+    - name: Ensure Microsoft keyring permissions
+      ansible.builtin.file:
+        path: "{{ microsoft_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Add Visual Studio Code APT source
+      ansible.builtin.copy:
+        dest: "{{ vscode_sources_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: https://packages.microsoft.com/repos/code
+          Suites: stable
+          Components: main
+          Architectures: amd64,arm64,armhf
+          Signed-By: {{ microsoft_keyring_path }}
+
+    - name: Install Visual Studio Code
+      ansible.builtin.apt:
+        name: code
+        state: present
+        update_cache: true
+
+    - name: Verify Visual Studio Code installation
+      ansible.builtin.command:
+        cmd: code --version
+      register: vscode_version
+      changed_when: false

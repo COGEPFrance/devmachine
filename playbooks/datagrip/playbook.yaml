@@ -1,0 +1,31 @@
+- name: Install DataGrip
+  hosts: devs
+  become: true
+  vars:
+    datagrip_snap_name: datagrip
+
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check DataGrip snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ datagrip_snap_name }}"
+      register: datagrip_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install DataGrip snap
+      ansible.builtin.command:
+        cmd: "snap install {{ datagrip_snap_name }} --classic"
+      changed_when: true
+      when: datagrip_snap.rc != 0

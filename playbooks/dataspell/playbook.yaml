@@ -1,0 +1,31 @@
+- name: Install DataSpell
+  hosts: devs
+  become: true
+  vars:
+    dataspell_snap_name: dataspell
+
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check DataSpell snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ dataspell_snap_name }}"
+      register: dataspell_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install DataSpell snap
+      ansible.builtin.command:
+        cmd: "snap install {{ dataspell_snap_name }} --classic"
+      changed_when: true
+      when: dataspell_snap.rc != 0

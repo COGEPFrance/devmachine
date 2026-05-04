@@ -1,0 +1,8 @@
+- name: Update hosts
+  import_playbook: ../playbooks/update/playbook.yaml
+- name: Install Cato
+  import_playbook: ../playbooks/cato/playbook.yaml
+- name: Install CrowdStrike
+  import_playbook: ../playbooks/crowdstrike/playbook.yaml
+- name: Install Microsoft Intune
+  import_playbook: ../playbooks/intune/playbook.yaml

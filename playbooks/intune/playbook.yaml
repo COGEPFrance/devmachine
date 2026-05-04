@@ -1,0 +1,56 @@
+- name: Install Microsoft Intune
+  hosts: devs
+  become: true
+  vars:
+    microsoft_repo_deb_url: "https://packages.microsoft.com/config/ubuntu/{{ ansible_distribution_version }}/packages-microsoft-prod.deb"
+    microsoft_repo_deb_path: "/tmp/packages-microsoft-prod.deb"
+    intune_socket_name: intune-daemon.socket
+
+  tasks:
+    - name: Assert target is supported Ubuntu on x86_64
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_architecture == "x86_64"
+        fail_msg: "Microsoft Intune for Linux requires Ubuntu Desktop on x86_64."
+
+    - name: Install repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gpg
+        state: present
+        update_cache: true
+
+    - name: Download Microsoft package repository configuration
+      ansible.builtin.get_url:
+        url: "{{ microsoft_repo_deb_url }}"
+        dest: "{{ microsoft_repo_deb_path }}"
+        mode: "0644"
+
+    - name: Install Microsoft package repository configuration
+      ansible.builtin.apt:
+        deb: "{{ microsoft_repo_deb_path }}"
+
+    - name: Install Microsoft Intune app
+      ansible.builtin.apt:
+        name: intune-portal
+        state: present
+        update_cache: true
+
+    - name: Ensure Intune daemon socket is started
+      ansible.builtin.systemd:
+        name: "{{ intune_socket_name }}"
+        state: started
+
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert Intune daemon socket is running
+      ansible.builtin.assert:
+        that:
+          - intune_socket_name in ansible_facts.services
+          - ansible_facts.services[intune_socket_name].state == "running"
+        fail_msg: "intune-daemon.socket is not running"
+        success_msg: "intune-daemon.socket is running"

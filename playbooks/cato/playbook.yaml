@@ -1,0 +1,23 @@
+- name: Install Cato Client
+  hosts: devs
+  become: true
+  vars:
+    cato_client_deb_url: "https://clientdownload.catonetworks.com/public/clients/cato-client-install.deb"
+    cato_client_deb_path: "/tmp/cato-client-install.deb"
+
+  tasks:
+    - name: Download Cato Client Debian package
+      ansible.builtin.get_url:
+        url: "{{ cato_client_deb_url }}"
+        dest: "{{ cato_client_deb_path }}"
+        mode: "0644"
+
+    - name: Install Cato Client Debian package
+      ansible.builtin.apt:
+        deb: "{{ cato_client_deb_path }}"
+
+    - name: Verify cato-sdp command is available
+      ansible.builtin.command:
+        cmd: cato-sdp version
+      register: cato_sdp_version
+      changed_when: false

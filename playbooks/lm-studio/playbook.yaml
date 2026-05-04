@@ -1,0 +1,72 @@
+- name: Install LM Studio
+  hosts: devs
+  become: true
+  vars:
+    lm_studio_appimage_url: "https://lmstudio.ai/download/latest/linux/x64"
+    lm_studio_install_dir: "/opt/lm-studio"
+    lm_studio_appimage_path: "{{ lm_studio_install_dir }}/LM-Studio.AppImage"
+    lm_studio_launcher_path: "/usr/local/bin/lm-studio"
+    lm_studio_desktop_path: "/usr/share/applications/lm-studio.desktop"
+
+  tasks:
+    - name: Assert target is supported amd64
+      ansible.builtin.assert:
+        that:
+          - ansible_architecture == "x86_64"
+        fail_msg: "This LM Studio playbook installs the x64 AppImage and requires amd64/x86_64."
+
+    - name: Install package prerequisites
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Create LM Studio installation directory
+      ansible.builtin.file:
+        path: "{{ lm_studio_install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download LM Studio AppImage
+      ansible.builtin.get_url:
+        url: "{{ lm_studio_appimage_url }}"
+        dest: "{{ lm_studio_appimage_path }}"
+        mode: "0755"
+
+    - name: Install LM Studio launcher
+      ansible.builtin.copy:
+        dest: "{{ lm_studio_launcher_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/usr/bin/env sh
+          exec {{ lm_studio_appimage_path }} "$@"
+
+    - name: Install LM Studio desktop entry
+      ansible.builtin.copy:
+        dest: "{{ lm_studio_desktop_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Type=Application
+          Name=LM Studio
+          Exec={{ lm_studio_launcher_path }}
+          Terminal=false
+          Categories=Development;Utility;
+
+    - name: Verify LM Studio AppImage is installed
+      ansible.builtin.stat:
+        path: "{{ lm_studio_appimage_path }}"
+      register: lm_studio_appimage
+
+    - name: Assert LM Studio AppImage is present
+      ansible.builtin.assert:
+        that:
+          - lm_studio_appimage.stat.exists
+          - lm_studio_appimage.stat.executable
+        fail_msg: "LM Studio AppImage is not installed or not executable."

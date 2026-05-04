@@ -1,0 +1,12 @@
+- name: Update hosts
+  import_playbook: ../playbooks/update/playbook.yaml
+- name: Install DataGrip
+  import_playbook: ../playbooks/datagrip/playbook.yaml
+- name: Install DataSpell
+  import_playbook: ../playbooks/dataspell/playbook.yaml
+- name: Install PhpStorm
+  import_playbook: ../playbooks/phpstorm/playbook.yaml
+- name: Install WebStorm
+  import_playbook: ../playbooks/webstorm/playbook.yaml
+- name: Install PyCharm
+  import_playbook: ../playbooks/pycharm/playbook.yaml

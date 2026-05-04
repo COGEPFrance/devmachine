@@ -1,0 +1,8 @@
+- name: Update hosts
+  import_playbook: ../playbooks/update/playbook.yaml
+- name: Install Visual Studio Code
+  import_playbook: ../playbooks/vscode/playbook.yaml
+- name: Install Obsidian
+  import_playbook: ../playbooks/obsidian/playbook.yaml
+- name: Install PyCharm
+  import_playbook: ../playbooks/pycharm/playbook.yaml

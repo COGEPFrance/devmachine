@@ -1,0 +1,31 @@
+- name: Install PhpStorm
+  hosts: devs
+  become: true
+  vars:
+    phpstorm_snap_name: phpstorm
+
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check PhpStorm snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ phpstorm_snap_name }}"
+      register: phpstorm_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install PhpStorm snap
+      ansible.builtin.command:
+        cmd: "snap install {{ phpstorm_snap_name }} --classic"
+      changed_when: true
+      when: phpstorm_snap.rc != 0

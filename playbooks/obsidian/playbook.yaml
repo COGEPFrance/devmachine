@@ -1,0 +1,31 @@
+- name: Install Obsidian
+  hosts: devs
+  become: true
+  vars:
+    obsidian_snap_name: obsidian
+
+  tasks:
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.service:
+        name: snapd
+        state: started
+        enabled: true
+
+    - name: Check Obsidian snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ obsidian_snap_name }}"
+      register: obsidian_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install Obsidian snap
+      ansible.builtin.command:
+        cmd: "snap install {{ obsidian_snap_name }} --classic"
+      changed_when: true
+      when: obsidian_snap.rc != 0

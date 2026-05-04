@@ -1,0 +1,6 @@
+- name: Update hosts
+  import_playbook: ../playbooks/update/playbook.yaml
+- name: Install Ollama
+  import_playbook: ../playbooks/ollama/playbook.yaml
+- name: Install LM Studio
+  import_playbook: ../playbooks/lm-studio/playbook.yaml

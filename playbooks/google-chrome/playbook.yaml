@@ -1,0 +1,65 @@
+- name: Install Google Chrome
+  hosts: devs
+  become: true
+  vars:
+    google_chrome_key_url: "https://dl.google.com/linux/linux_signing_key.pub"
+    google_chrome_key_tmp_path: "/tmp/google-linux-signing-key.pub"
+    google_chrome_keyring_path: "/usr/share/keyrings/google-chrome.gpg"
+    google_chrome_repo: "deb [arch=amd64 signed-by={{ google_chrome_keyring_path }}] http://dl.google.com/linux/chrome/deb/ stable main"
+
+  tasks:
+    - name: Assert target is supported amd64
+      ansible.builtin.assert:
+        that:
+          - ansible_architecture == "x86_64"
+        fail_msg: "Google Chrome stable Linux package requires amd64/x86_64."
+
+    - name: Install repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - gpg
+        state: present
+        update_cache: true
+
+    - name: Download Google Linux signing key
+      ansible.builtin.get_url:
+        url: "{{ google_chrome_key_url }}"
+        dest: "{{ google_chrome_key_tmp_path }}"
+        mode: "0644"
+
+    - name: Install Google Chrome keyring
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - "{{ google_chrome_keyring_path }}"
+          - "{{ google_chrome_key_tmp_path }}"
+        creates: "{{ google_chrome_keyring_path }}"
+
+    - name: Ensure Google Chrome keyring permissions
+      ansible.builtin.file:
+        path: "{{ google_chrome_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Add Google Chrome APT repository
+      ansible.builtin.apt_repository:
+        repo: "{{ google_chrome_repo }}"
+        filename: google-chrome
+        state: present
+        update_cache: true
+
+    - name: Install Google Chrome stable
+      ansible.builtin.apt:
+        name: google-chrome-stable
+        state: present
+
+    - name: Verify Google Chrome installation
+      ansible.builtin.command:
+        cmd: google-chrome --version
+      register: google_chrome_version
+      changed_when: false
