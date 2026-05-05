@@ -1,0 +1,87 @@
+- name: Install keyd
+  hosts: devs
+  become: true
+  vars:
+    devmachine_keyd_ppa: ppa:keyd-team/ppa
+    devmachine_keyd_packages:
+      - keyd
+    devmachine_keyd_config_path: /etc/keyd/default.conf
+    devmachine_keyd_default_config: ""
+
+  tasks:
+    - name: Assert target is supported Ubuntu
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+        fail_msg: "keyd PPA installation requires an Ubuntu target."
+
+    - name: Install keyd repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - python3-launchpadlib
+          - software-properties-common
+        state: present
+        update_cache: true
+
+    - name: Add keyd APT repository
+      ansible.builtin.apt_repository:
+        repo: "{{ devmachine_keyd_ppa }}"
+        state: present
+        update_cache: true
+
+    - name: Install keyd packages
+      ansible.builtin.apt:
+        name: "{{ devmachine_keyd_packages }}"
+        state: present
+
+    - name: Ensure keyd configuration directory exists
+      ansible.builtin.file:
+        path: /etc/keyd
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install keyd default configuration
+      ansible.builtin.copy:
+        dest: "{{ devmachine_keyd_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ devmachine_keyd_default_config }}"
+      when: devmachine_keyd_default_config | trim | length > 0
+      notify: Reload keyd
+
+    - name: Enable and start keyd
+      ansible.builtin.systemd:
+        name: keyd
+        enabled: true
+        state: started
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert keyd package is installed
+      ansible.builtin.assert:
+        that:
+          - "'keyd' in ansible_facts.packages"
+        fail_msg: "keyd is not installed."
+        success_msg: "keyd is installed."
+
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert keyd service exists
+      ansible.builtin.assert:
+        that:
+          - "'keyd.service' in ansible_facts.services"
+        fail_msg: "keyd service was not found."
+        success_msg: "keyd service is available."
+
+  handlers:
+    - name: Reload keyd
+      ansible.builtin.command:
+        cmd: keyd reload
+      changed_when: true

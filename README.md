@@ -57,6 +57,7 @@ devs:
       devmachine_ansible_user_github: TON_USERNAME_GITHUB
       devmachine_end_user: prenom.nom
       # devmachine_end_user_password_hash: "$y$j9T$..."
+      # devmachine_docker_extra_users: []
 ```
 
 - `ansible_user` reste le compte admin utilisé par Ansible pour se connecter au poste.
@@ -82,6 +83,141 @@ Créer ou maintenir le compte utilisateur final :
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/user/playbook.yaml --ask-become-pass
+```
+
+## Paquets De Base
+
+Le playbook `playbooks/base-packages/playbook.yaml` installe les utilitaires communs du poste :
+
+- vim
+- curl
+- git
+- tree
+- gnome-shell-extensions
+- python3-pip
+- gnome-tweaks
+- terminator
+- net-tools
+
+Zsh, Google Chrome et Clipboard Indicator restent dans leurs playbooks dédiés pour garder les responsabilités séparées.
+
+Ajouter des paquets au cas par cas :
+
+```yaml
+devmachine_base_extra_packages: []
+```
+
+Installer les paquets de base seuls :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/base-packages/playbook.yaml --ask-become-pass
+```
+
+## keyd
+
+Le playbook `playbooks/keyd/playbook.yaml` installe `keyd`, l'active au démarrage et démarre le service. Il n'installe aucun mapping par défaut pour éviter de modifier le comportement clavier avant identification précise du clavier externe.
+
+Installer keyd seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/keyd/playbook.yaml --ask-become-pass
+```
+
+Identifier les touches et périphériques :
+
+```sh
+sudo keyd monitor
+```
+
+Pour observer les événements bruts du clavier, arrêter temporairement le service :
+
+```sh
+sudo systemctl stop keyd
+sudo keyd monitor
+sudo systemctl start keyd
+```
+
+Un mapping pourra ensuite être ajouté via `devmachine_keyd_default_config`.
+
+## Zsh
+
+Le playbook `playbooks/zsh/playbook.yaml` installe Zsh pour la machine entière, puis configure les comptes existants suivants :
+
+- `ansible_user`, donc `bigboss`
+- `devmachine_end_user`, si l'utilisateur final est renseigné et déjà créé
+- les comptes listés dans `devmachine_zsh_extra_users`, si besoin
+
+Par défaut, il définit Zsh comme shell de connexion et ajoute un bloc `.zshrc` minimal sans écraser le reste du fichier.
+
+Variables utiles :
+
+```yaml
+devmachine_zsh_extra_users: []
+devmachine_zsh_set_default_shell: true
+devmachine_zsh_configure_zshrc: true
+```
+
+Installer Zsh seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/zsh/playbook.yaml --ask-become-pass
+```
+
+Après installation, fermer et rouvrir la session pour utiliser le nouveau shell par défaut.
+
+## Docker
+
+Le playbook `playbooks/docker/playbook.yaml` installe Docker Engine depuis le dépôt officiel Docker, avec Buildx et Docker Compose V2.
+
+Il installe Docker pour la machine entière, puis ajoute les comptes existants suivants au groupe `docker` :
+
+- `ansible_user`, donc `bigboss`
+- `devmachine_end_user`, si l'utilisateur final est renseigné et déjà créé
+- les comptes listés dans `devmachine_docker_extra_users`, si besoin
+
+Le groupe `docker` permet de lancer des conteneurs sans `sudo`, mais il donne des privilèges équivalents à root. C'est cohérent pour un compte final qui peut déjà utiliser `sudo`.
+
+Installer Docker seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/docker/playbook.yaml --ask-become-pass
+```
+
+Après installation, fermer et rouvrir la session de l'utilisateur final pour que le groupe `docker` soit pris en compte, puis vérifier :
+
+```sh
+docker run hello-world
+docker compose version
+```
+
+## GNOME Clipboard Indicator
+
+Le playbook `playbooks/gnome-clipboard-indicator/playbook.yaml` installe l'extension GNOME Shell Clipboard Indicator depuis GitHub dans le profil utilisateur.
+
+Par défaut, l'extension cible `devmachine_end_user` si la variable est renseignée, sinon `ansible_user`. Il est possible de forcer le compte cible avec `devmachine_gnome_extensions_user`.
+
+Le playbook détecte la version majeure de GNOME Shell et choisit la branche compatible du dépôt quand elle est connue. Il est possible de forcer la branche avec `devmachine_gnome_clipboard_indicator_version`.
+
+Installer l'extension seule :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/gnome-clipboard-indicator/playbook.yaml --ask-become-pass
+```
+
+## Keeper
+
+Le playbook `playbooks/keeper/playbook.yaml` installe Keeper Password Manager via Snap, avec le paquet officiel `keepersecurity`.
+
+Installer Keeper seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/keeper/playbook.yaml --ask-become-pass
+```
+
+Canal Snap par défaut :
+
+```yaml
+keeper_snap_channel: latest/stable
 ```
 
 ## Intune
@@ -122,6 +258,11 @@ ansible-playbook -i inventory.yaml packages/infra.yaml --ask-become-pass
 
 ### Base
 
+- base-packages
+- keyd
+- zsh
+- gnome-clipboard-indicator
+- keeper
 - teams
 - google-chrome
 
@@ -140,6 +281,7 @@ ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass
 
 ### Dev
 
+- docker
 - vscode
 - obsidian
 - pycharm

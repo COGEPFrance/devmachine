@@ -1,0 +1,40 @@
+- name: Install base packages
+  hosts: devs
+  become: true
+  vars:
+    devmachine_base_packages:
+      - vim
+      - curl
+      - git
+      - tree
+      - gnome-shell-extensions
+      - python3-pip
+      - gnome-tweaks
+      - terminator
+      - net-tools
+    devmachine_base_extra_packages: []
+    devmachine_base_packages_all: "{{ (devmachine_base_packages + devmachine_base_extra_packages) | unique | list }}"
+
+  tasks:
+    - name: Assert target uses APT
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "Base packages playbook requires a Debian/Ubuntu target."
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name: "{{ devmachine_base_packages_all }}"
+        state: present
+        update_cache: true
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert base packages are installed
+      ansible.builtin.assert:
+        that:
+          - (devmachine_base_packages_all | difference(ansible_facts.packages.keys() | list) | length) == 0
+        fail_msg: "Some base packages are not installed."
+        success_msg: "Base packages are installed."

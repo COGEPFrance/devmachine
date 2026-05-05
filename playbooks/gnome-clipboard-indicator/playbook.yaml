@@ -1,0 +1,156 @@
+- name: Install GNOME Clipboard Indicator extension
+  hosts: devs
+  become: true
+  vars:
+    devmachine_gnome_extensions_user: >-
+      {{
+        devmachine_end_user
+        if (devmachine_end_user is defined and (devmachine_end_user | length > 0))
+        else ansible_user
+      }}
+    devmachine_gnome_clipboard_indicator_uuid: clipboard-indicator@tudmotu.com
+    devmachine_gnome_clipboard_indicator_repo: "https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator.git"
+    devmachine_gnome_clipboard_indicator_version_by_shell:
+      "45": gnome45
+      "46": gnome46
+      "50": gnome-50
+
+  tasks:
+    - name: Install GNOME extension prerequisites
+      ansible.builtin.apt:
+        name:
+          - dbus-user-session
+          - dconf-cli
+          - git
+          - libglib2.0-bin
+        state: present
+        update_cache: true
+
+    - name: Verify GNOME Shell is installed
+      ansible.builtin.command:
+        cmd: gnome-shell --version
+      register: devmachine_gnome_shell_version
+      changed_when: false
+      failed_when: false
+
+    - name: Assert GNOME Shell is available
+      ansible.builtin.assert:
+        that:
+          - devmachine_gnome_shell_version.rc == 0
+        fail_msg: "GNOME Shell is required to install Clipboard Indicator."
+
+    - name: Resolve GNOME Shell major version
+      ansible.builtin.set_fact:
+        devmachine_gnome_shell_major: "{{ devmachine_gnome_shell_version.stdout | regex_search('[0-9]+') }}"
+
+    - name: Resolve Clipboard Indicator git version
+      ansible.builtin.set_fact:
+        devmachine_gnome_clipboard_indicator_git_version: >-
+          {{
+            devmachine_gnome_clipboard_indicator_version
+            | default(
+              devmachine_gnome_clipboard_indicator_version_by_shell[devmachine_gnome_shell_major]
+              | default("master")
+            )
+          }}
+
+    - name: Read GNOME extensions user account information
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ devmachine_gnome_extensions_user }}"
+
+    - name: Resolve GNOME extensions user home
+      ansible.builtin.set_fact:
+        devmachine_gnome_extensions_home: "{{ ansible_facts.getent_passwd[devmachine_gnome_extensions_user][4] }}"
+
+    - name: Ensure GNOME Shell extensions directory exists
+      ansible.builtin.file:
+        path: "{{ devmachine_gnome_extensions_home }}/.local/share/gnome-shell/extensions"
+        state: directory
+        owner: "{{ devmachine_gnome_extensions_user }}"
+        mode: "0755"
+
+    - name: Clone GNOME Clipboard Indicator extension
+      ansible.builtin.git:
+        repo: "{{ devmachine_gnome_clipboard_indicator_repo }}"
+        dest: "{{ devmachine_gnome_extensions_home }}/.local/share/gnome-shell/extensions/{{ devmachine_gnome_clipboard_indicator_uuid }}"
+        version: "{{ devmachine_gnome_clipboard_indicator_git_version }}"
+        clone: true
+        update: true
+      become: true
+      become_user: "{{ devmachine_gnome_extensions_user }}"
+      environment:
+        HOME: "{{ devmachine_gnome_extensions_home }}"
+
+    - name: Verify Clipboard Indicator metadata is present
+      ansible.builtin.stat:
+        path: "{{ devmachine_gnome_extensions_home }}/.local/share/gnome-shell/extensions/{{ devmachine_gnome_clipboard_indicator_uuid }}/metadata.json"
+      register: devmachine_gnome_clipboard_indicator_metadata
+
+    - name: Assert Clipboard Indicator extension was installed
+      ansible.builtin.assert:
+        that:
+          - devmachine_gnome_clipboard_indicator_metadata.stat.exists
+        fail_msg: "Clipboard Indicator metadata.json was not found after clone."
+
+    - name: Read enabled GNOME Shell extensions
+      ansible.builtin.command:
+        argv:
+          - dbus-run-session
+          - --
+          - gsettings
+          - get
+          - org.gnome.shell
+          - enabled-extensions
+      become: true
+      become_user: "{{ devmachine_gnome_extensions_user }}"
+      environment:
+        HOME: "{{ devmachine_gnome_extensions_home }}"
+      register: devmachine_gnome_enabled_extensions_raw
+      changed_when: false
+
+    - name: Resolve enabled GNOME Shell extensions
+      ansible.builtin.set_fact:
+        devmachine_gnome_enabled_extensions: "{{ devmachine_gnome_enabled_extensions_raw.stdout | regex_findall(\"'([^']+)'\") }}"
+
+    - name: Enable GNOME Clipboard Indicator extension
+      ansible.builtin.command:
+        argv:
+          - dbus-run-session
+          - --
+          - gsettings
+          - set
+          - org.gnome.shell
+          - enabled-extensions
+          - "{{ devmachine_gnome_enabled_extensions_target }}"
+      become: true
+      become_user: "{{ devmachine_gnome_extensions_user }}"
+      environment:
+        HOME: "{{ devmachine_gnome_extensions_home }}"
+      vars:
+        devmachine_gnome_enabled_extensions_target: >-
+          ['{{ ((devmachine_gnome_enabled_extensions + [devmachine_gnome_clipboard_indicator_uuid]) | unique | list) | join("', '") }}']
+      when: devmachine_gnome_clipboard_indicator_uuid not in devmachine_gnome_enabled_extensions
+      changed_when: true
+
+    - name: Read enabled GNOME Shell extensions after update
+      ansible.builtin.command:
+        argv:
+          - dbus-run-session
+          - --
+          - gsettings
+          - get
+          - org.gnome.shell
+          - enabled-extensions
+      become: true
+      become_user: "{{ devmachine_gnome_extensions_user }}"
+      environment:
+        HOME: "{{ devmachine_gnome_extensions_home }}"
+      register: devmachine_gnome_enabled_extensions_after_raw
+      changed_when: false
+
+    - name: Assert GNOME Clipboard Indicator extension is enabled
+      ansible.builtin.assert:
+        that:
+          - devmachine_gnome_clipboard_indicator_uuid in (devmachine_gnome_enabled_extensions_after_raw.stdout | regex_findall("'([^']+)'"))
+        fail_msg: "Clipboard Indicator extension is installed but not enabled."

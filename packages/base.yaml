@@ -4,6 +4,16 @@
   import_playbook: ../playbooks/ansible-user/playbook.yaml
 - name: Configure end user
   import_playbook: ../playbooks/user/playbook.yaml
+- name: Install base packages
+  import_playbook: ../playbooks/base-packages/playbook.yaml
+- name: Install keyd
+  import_playbook: ../playbooks/keyd/playbook.yaml
+- name: Install Zsh
+  import_playbook: ../playbooks/zsh/playbook.yaml
+- name: Install GNOME Clipboard Indicator
+  import_playbook: ../playbooks/gnome-clipboard-indicator/playbook.yaml
+- name: Install Keeper Password Manager
+  import_playbook: ../playbooks/keeper/playbook.yaml
 - name: Install Teams
   import_playbook: ../playbooks/teams/playbook.yaml
 - name: Install Google Chrome

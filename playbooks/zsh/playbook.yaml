@@ -1,0 +1,93 @@
+- name: Install Zsh
+  hosts: devs
+  become: true
+  vars:
+    devmachine_zsh_path: /usr/bin/zsh
+    devmachine_zsh_set_default_shell: true
+    devmachine_zsh_configure_zshrc: true
+    devmachine_zsh_extra_users: []
+    devmachine_zsh_users: >-
+      {{
+        (
+          [ansible_user | default("")]
+          + [devmachine_end_user | default("")]
+          + devmachine_zsh_extra_users
+        )
+        | reject("equalto", "")
+        | unique
+        | list
+      }}
+
+  tasks:
+    - name: Install Zsh package
+      ansible.builtin.apt:
+        name: zsh
+        state: present
+        update_cache: true
+
+    - name: Ensure Zsh is listed as a valid login shell
+      ansible.builtin.lineinfile:
+        path: /etc/shells
+        line: "{{ devmachine_zsh_path }}"
+        state: present
+
+    - name: Read local user accounts
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Keep only existing Zsh users
+      ansible.builtin.set_fact:
+        devmachine_zsh_existing_users: "{{ devmachine_zsh_users | intersect(ansible_facts.getent_passwd.keys() | list) }}"
+
+    - name: Compute missing Zsh users
+      ansible.builtin.set_fact:
+        devmachine_zsh_missing_users: "{{ devmachine_zsh_users | difference(devmachine_zsh_existing_users) }}"
+
+    - name: Report missing Zsh users
+      ansible.builtin.debug:
+        msg: "Zsh not configured for missing users: {{ devmachine_zsh_missing_users | join(', ') }}"
+      when: devmachine_zsh_missing_users | length > 0
+
+    - name: Set Zsh as default shell
+      ansible.builtin.user:
+        name: "{{ item }}"
+        shell: "{{ devmachine_zsh_path }}"
+      loop: "{{ devmachine_zsh_existing_users }}"
+      when: devmachine_zsh_set_default_shell
+
+    - name: Configure minimal Zsh profile
+      ansible.builtin.blockinfile:
+        path: "{{ ansible_facts.getent_passwd[item][4] }}/.zshrc"
+        create: true
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: "0644"
+        marker: "# {mark} ANSIBLE MANAGED ZSH BASE"
+        block: |
+          export HISTFILE="${HOME}/.zsh_history"
+          export HISTSIZE=10000
+          export SAVEHIST=10000
+          setopt append_history
+          setopt hist_ignore_dups
+          setopt share_history
+          autoload -Uz compinit
+          compinit
+      loop: "{{ devmachine_zsh_existing_users }}"
+      when: devmachine_zsh_configure_zshrc
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert Zsh is installed
+      ansible.builtin.assert:
+        that:
+          - "'zsh' in ansible_facts.packages"
+        fail_msg: "Zsh is not installed."
+        success_msg: "Zsh is installed."
+
+    - name: Verify Zsh binary
+      ansible.builtin.command:
+        cmd: "{{ devmachine_zsh_path }} --version"
+      register: devmachine_zsh_version
+      changed_when: false

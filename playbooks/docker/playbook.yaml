@@ -1,0 +1,184 @@
+- name: Install Docker Engine
+  hosts: devs
+  become: true
+  vars:
+    docker_key_url: "https://download.docker.com/linux/ubuntu/gpg"
+    docker_keyring_path: "/etc/apt/keyrings/docker.asc"
+    docker_repo_path: "/etc/apt/sources.list.d/docker.sources"
+    docker_legacy_repo_path: "/etc/apt/sources.list.d/docker.list"
+    docker_supported_ubuntu_versions:
+      - "22.04"
+      - "24.04"
+      - "25.10"
+      - "26.04"
+    docker_arch_map:
+      x86_64: amd64
+      aarch64: arm64
+      armv7l: armhf
+      ppc64le: ppc64el
+      s390x: s390x
+    docker_apt_arch: "{{ docker_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+    docker_supported_architectures:
+      - amd64
+      - arm64
+      - armhf
+      - ppc64el
+      - s390x
+    docker_conflicting_packages:
+      - docker.io
+      - docker-compose
+      - docker-compose-v2
+      - docker-doc
+      - podman-docker
+      - containerd
+      - runc
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    devmachine_docker_extra_users: []
+    devmachine_docker_users: >-
+      {{
+        (
+          [ansible_user | default("")]
+          + [devmachine_end_user | default("")]
+          + devmachine_docker_extra_users
+        )
+        | reject("equalto", "")
+        | unique
+        | list
+      }}
+
+  tasks:
+    - name: Assert target is supported Ubuntu
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version in docker_supported_ubuntu_versions
+          - docker_apt_arch in docker_supported_architectures
+        fail_msg: "Docker Engine installation requires a supported Ubuntu release and architecture."
+
+    - name: Remove conflicting Docker packages
+      ansible.builtin.apt:
+        name: "{{ docker_conflicting_packages }}"
+        state: absent
+
+    - name: Install Docker repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Ensure APT keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download Docker signing key
+      ansible.builtin.get_url:
+        url: "{{ docker_key_url }}"
+        dest: "{{ docker_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Remove legacy Docker APT repository
+      ansible.builtin.file:
+        path: "{{ docker_legacy_repo_path }}"
+        state: absent
+
+    - name: Add Docker APT repository
+      ansible.builtin.copy:
+        dest: "{{ docker_repo_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: https://download.docker.com/linux/ubuntu
+          Suites: {{ ansible_distribution_release }}
+          Components: stable
+          Architectures: {{ docker_apt_arch }}
+          Signed-By: {{ docker_keyring_path }}
+
+    - name: Install Docker packages
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Ensure docker group exists
+      ansible.builtin.group:
+        name: docker
+        state: present
+
+    - name: Read local user accounts
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Keep only existing Docker users
+      ansible.builtin.set_fact:
+        devmachine_docker_existing_users: "{{ devmachine_docker_users | intersect(ansible_facts.getent_passwd.keys() | list) }}"
+
+    - name: Compute missing Docker users
+      ansible.builtin.set_fact:
+        devmachine_docker_missing_users: "{{ devmachine_docker_users | difference(devmachine_docker_existing_users) }}"
+
+    - name: Report missing Docker users
+      ansible.builtin.debug:
+        msg: "Docker group not applied to missing users: {{ devmachine_docker_missing_users | join(', ') }}"
+      when: devmachine_docker_missing_users | length > 0
+
+    - name: Add users to docker group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups:
+          - docker
+        append: true
+      loop: "{{ devmachine_docker_existing_users }}"
+
+    - name: Enable and start containerd
+      ansible.builtin.systemd:
+        name: containerd
+        enabled: true
+        state: started
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert Docker packages are installed
+      ansible.builtin.assert:
+        that:
+          - "'docker-ce' in ansible_facts.packages"
+          - "'docker-ce-cli' in ansible_facts.packages"
+          - "'containerd.io' in ansible_facts.packages"
+          - "'docker-buildx-plugin' in ansible_facts.packages"
+          - "'docker-compose-plugin' in ansible_facts.packages"
+        fail_msg: "Docker Engine or Docker Compose plugin is not installed."
+        success_msg: "Docker Engine and Docker Compose plugin are installed."
+
+    - name: Verify Docker CLI
+      ansible.builtin.command:
+        cmd: docker --version
+      register: docker_cli_version
+      changed_when: false
+
+    - name: Verify Docker Compose plugin
+      ansible.builtin.command:
+        cmd: docker compose version
+      register: docker_compose_version
+      changed_when: false

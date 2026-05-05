@@ -2,6 +2,10 @@
   import_playbook: ../playbooks/update/playbook.yaml
 - name: Configure Ansible user SSH access
   import_playbook: ../playbooks/ansible-user/playbook.yaml
+- name: Configure end user
+  import_playbook: ../playbooks/user/playbook.yaml
+- name: Install Docker
+  import_playbook: ../playbooks/docker/playbook.yaml
 - name: Install Visual Studio Code
   import_playbook: ../playbooks/vscode/playbook.yaml
 - name: Install Obsidian
