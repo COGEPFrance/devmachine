@@ -1,5 +1,8 @@
 devs:
   hosts:
     pcl007:
-      ansible_host: 10.0.0.38
+      ansible_host: 10.0.0.105
       ansible_user: bigboss
+      # devmachine_ansible_user_github: TON_USERNAME_GITHUB
+      devmachine_end_user: "killian"
+      # devmachine_end_user_password_hash: "$y$j9T$..."

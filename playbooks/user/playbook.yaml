@@ -1,0 +1,29 @@
+- name: Configure end user
+  hosts: devs
+  become: true
+  vars:
+    devmachine_end_user_configured: "{{ devmachine_end_user is defined and (devmachine_end_user | length > 0) }}"
+    devmachine_end_user_shell: /bin/bash
+    devmachine_end_user_home: "/home/{{ devmachine_end_user | default('') }}"
+    devmachine_end_user_groups:
+      - sudo
+
+  tasks:
+    - name: Skip end user configuration when no user is configured
+      ansible.builtin.debug:
+        msg: "No devmachine_end_user configured in inventory.yaml; skipping end user configuration."
+      when: not devmachine_end_user_configured
+
+    - name: Configure devmachine end user
+      when: devmachine_end_user_configured
+      block:
+        - name: Create devmachine end user with sudo access
+          ansible.builtin.user:
+            name: "{{ devmachine_end_user }}"
+            shell: "{{ devmachine_end_user_shell }}"
+            groups: "{{ devmachine_end_user_groups }}"
+            append: true
+            create_home: true
+            password: "{{ devmachine_end_user_password_hash | default(omit) }}"
+            update_password: on_create
+            state: present

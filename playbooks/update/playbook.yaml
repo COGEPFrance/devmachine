@@ -1,7 +1,29 @@
 - name: Update
   hosts: devs
   become: true
+  vars:
+    ubuntu_apt_mirror: "https://fr.archive.ubuntu.com/ubuntu/"
+    ubuntu_sources_path: "/etc/apt/sources.list.d/ubuntu.sources"
+    ubuntu_apt_suites:
+      - "{{ ansible_distribution_release }}"
+      - "{{ ansible_distribution_release }}-updates"
+      - "{{ ansible_distribution_release }}-backports"
+      - "{{ ansible_distribution_release }}-security"
   tasks:
+    - name: Configure Ubuntu APT sources mirror
+      ansible.builtin.copy:
+        dest: "{{ ubuntu_sources_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: {{ ubuntu_apt_mirror }}
+          Suites: {{ ubuntu_apt_suites | join(' ') }}
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+      when: ansible_distribution == "Ubuntu"
+
     - name: Update my hosts
       ansible.builtin.apt:
         update_cache: true

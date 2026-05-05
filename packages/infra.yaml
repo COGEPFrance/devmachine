@@ -6,3 +6,5 @@
   import_playbook: ../playbooks/crowdstrike/playbook.yaml
 - name: Install Microsoft Intune
   import_playbook: ../playbooks/intune/playbook.yaml
+- name: Install Ivanti Neurons
+  import_playbook: ../playbooks/ivanti-neurons/playbook.yaml

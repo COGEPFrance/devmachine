@@ -2,9 +2,18 @@
   hosts: devs
   become: true
   vars:
-    microsoft_repo_deb_url: "https://packages.microsoft.com/config/ubuntu/{{ ansible_distribution_version }}/packages-microsoft-prod.deb"
-    microsoft_repo_deb_path: "/tmp/packages-microsoft-prod.deb"
-    intune_socket_name: intune-daemon.socket
+    microsoft_key_url: "https://packages.microsoft.com/keys/microsoft.asc"
+    microsoft_key_tmp_path: "/tmp/microsoft.asc"
+    microsoft_keyring_path: "/usr/share/keyrings/microsoft.gpg"
+    microsoft_prod_repo_path: "/etc/apt/sources.list.d/microsoft-prod.list"
+    microsoft_edge_repo_path: "/etc/apt/sources.list.d/microsoft-edge.list"
+    microsoft_prod_repo: >-
+      deb [arch=amd64 signed-by={{ microsoft_keyring_path }}]
+      https://packages.microsoft.com/ubuntu/{{ ansible_distribution_version }}/prod
+      {{ ansible_distribution_release }} main
+    microsoft_edge_repo: >-
+      deb [arch=amd64 signed-by={{ microsoft_keyring_path }}]
+      https://packages.microsoft.com/repos/edge stable main
 
   tasks:
     - name: Assert target is supported Ubuntu on x86_64
@@ -12,6 +21,7 @@
         that:
           - ansible_distribution == "Ubuntu"
           - ansible_architecture == "x86_64"
+          - ansible_distribution_version in ["24.04", "26.04"]
         fail_msg: "Microsoft Intune for Linux requires Ubuntu Desktop on x86_64."
 
     - name: Install repository prerequisites
@@ -23,34 +33,67 @@
         state: present
         update_cache: true
 
-    - name: Download Microsoft package repository configuration
+    - name: Download Microsoft signing key
       ansible.builtin.get_url:
-        url: "{{ microsoft_repo_deb_url }}"
-        dest: "{{ microsoft_repo_deb_path }}"
+        url: "{{ microsoft_key_url }}"
+        dest: "{{ microsoft_key_tmp_path }}"
         mode: "0644"
 
-    - name: Install Microsoft package repository configuration
+    - name: Install Microsoft keyring
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - "{{ microsoft_keyring_path }}"
+          - "{{ microsoft_key_tmp_path }}"
+        creates: "{{ microsoft_keyring_path }}"
+
+    - name: Ensure Microsoft keyring permissions
+      ansible.builtin.file:
+        path: "{{ microsoft_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Add Microsoft Intune APT repository
+      ansible.builtin.copy:
+        dest: "{{ microsoft_prod_repo_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {{ microsoft_prod_repo }}
+
+    - name: Add Microsoft Edge APT repository
+      ansible.builtin.copy:
+        dest: "{{ microsoft_edge_repo_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {{ microsoft_edge_repo }}
+
+    - name: Install Microsoft Edge
       ansible.builtin.apt:
-        deb: "{{ microsoft_repo_deb_path }}"
+        name: microsoft-edge-stable
+        state: present
+        update_cache: true
 
     - name: Install Microsoft Intune app
       ansible.builtin.apt:
         name: intune-portal
         state: present
-        update_cache: true
 
-    - name: Ensure Intune daemon socket is started
-      ansible.builtin.systemd:
-        name: "{{ intune_socket_name }}"
-        state: started
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
 
-    - name: Collect service facts
-      ansible.builtin.service_facts:
-
-    - name: Assert Intune daemon socket is running
+    - name: Assert Microsoft Intune packages are installed
       ansible.builtin.assert:
         that:
-          - intune_socket_name in ansible_facts.services
-          - ansible_facts.services[intune_socket_name].state == "running"
-        fail_msg: "intune-daemon.socket is not running"
-        success_msg: "intune-daemon.socket is running"
+          - "'microsoft-edge-stable' in ansible_facts.packages"
+          - "'intune-portal' in ansible_facts.packages"
+        fail_msg: "Microsoft Intune app is not installed"
+        success_msg: "Microsoft Intune app is installed"

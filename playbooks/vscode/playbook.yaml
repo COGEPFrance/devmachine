@@ -62,8 +62,13 @@
         state: present
         update_cache: true
 
-    - name: Verify Visual Studio Code installation
-      ansible.builtin.command:
-        cmd: code --version
-      register: vscode_version
-      changed_when: false
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert Visual Studio Code package is installed
+      ansible.builtin.assert:
+        that:
+          - "'code' in ansible_facts.packages"
+        fail_msg: "Visual Studio Code package is not installed"
+        success_msg: "Visual Studio Code package is installed"

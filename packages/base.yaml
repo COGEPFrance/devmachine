@@ -1,5 +1,9 @@
 - name: Update hosts
   import_playbook: ../playbooks/update/playbook.yaml
+- name: Configure Ansible user SSH access
+  import_playbook: ../playbooks/ansible-user/playbook.yaml
+- name: Configure end user
+  import_playbook: ../playbooks/user/playbook.yaml
 - name: Install Teams
   import_playbook: ../playbooks/teams/playbook.yaml
 - name: Install Google Chrome

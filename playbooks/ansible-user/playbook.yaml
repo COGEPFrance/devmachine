@@ -1,0 +1,55 @@
+- name: Configure Ansible user SSH access
+  hosts: devs
+  become: true
+  vars:
+    devmachine_ansible_user_name: "{{ ansible_user }}"
+    devmachine_ansible_user_github_configured: "{{ devmachine_ansible_user_github is defined and (devmachine_ansible_user_github | length > 0) }}"
+    devmachine_ansible_user_github_keys_path: "/tmp/{{ devmachine_ansible_user_name }}-github.keys"
+
+  tasks:
+    - name: Skip Ansible user SSH access when no GitHub account is configured
+      ansible.builtin.debug:
+        msg: "No devmachine_ansible_user_github configured in inventory.yaml; skipping Ansible user SSH access."
+      when: not devmachine_ansible_user_github_configured
+
+    - name: Configure GitHub SSH keys for Ansible user
+      when: devmachine_ansible_user_github_configured
+      block:
+        - name: Read Ansible user account information
+          ansible.builtin.getent:
+            database: passwd
+            key: "{{ devmachine_ansible_user_name }}"
+
+        - name: Download GitHub SSH public keys for Ansible user
+          ansible.builtin.get_url:
+            url: "https://github.com/{{ devmachine_ansible_user_github }}.keys"
+            dest: "{{ devmachine_ansible_user_github_keys_path }}"
+            mode: "0644"
+
+        - name: Read GitHub SSH public keys for Ansible user
+          ansible.builtin.slurp:
+            src: "{{ devmachine_ansible_user_github_keys_path }}"
+          register: devmachine_ansible_user_github_keys
+
+        - name: Create Ansible user SSH directory
+          ansible.builtin.file:
+            path: "{{ ansible_facts.getent_passwd[devmachine_ansible_user_name][4] }}/.ssh"
+            state: directory
+            owner: "{{ devmachine_ansible_user_name }}"
+            group: "{{ devmachine_ansible_user_name }}"
+            mode: "0700"
+
+        - name: Install Ansible user GitHub SSH public keys
+          ansible.builtin.blockinfile:
+            path: "{{ ansible_facts.getent_passwd[devmachine_ansible_user_name][4] }}/.ssh/authorized_keys"
+            create: true
+            owner: "{{ devmachine_ansible_user_name }}"
+            group: "{{ devmachine_ansible_user_name }}"
+            mode: "0600"
+            marker: "# {mark} ANSIBLE MANAGED GITHUB KEYS FOR ANSIBLE USER"
+            block: "{{ devmachine_ansible_user_github_keys.content | b64decode | trim }}"
+
+        - name: Remove temporary GitHub SSH public keys file for Ansible user
+          ansible.builtin.file:
+            path: "{{ devmachine_ansible_user_github_keys_path }}"
+            state: absent
