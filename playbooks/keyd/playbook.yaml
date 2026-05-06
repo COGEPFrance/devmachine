@@ -7,6 +7,18 @@
       - keyd
     devmachine_keyd_config_path: /etc/keyd/default.conf
     devmachine_keyd_default_config: ""
+    devmachine_keyd_binary_candidates:
+      - /usr/bin/keyd
+      - /usr/bin/keyd.rvaiya
+    devmachine_keyd_keyboard_ids: []
+    devmachine_keyd_swap_grave_102nd: false
+    devmachine_keyd_swap_grave_102nd_config: |
+      [ids]
+      {{ devmachine_keyd_keyboard_ids | join('\n') }}
+
+      [main]
+      grave = 102nd
+      102nd = grave
 
   tasks:
     - name: Assert target is supported Ubuntu
@@ -35,6 +47,29 @@
         name: "{{ devmachine_keyd_packages }}"
         state: present
 
+    - name: Check keyd binary candidates
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ devmachine_keyd_binary_candidates }}"
+      register: devmachine_keyd_binary_candidate_stats
+
+    - name: Resolve keyd binary path
+      ansible.builtin.set_fact:
+        devmachine_keyd_binary_path: >-
+          {{
+            devmachine_keyd_binary_candidate_stats.results
+            | selectattr('stat.exists')
+            | map(attribute='stat.path')
+            | first
+            | default('')
+          }}
+
+    - name: Assert keyd binary is available
+      ansible.builtin.assert:
+        that:
+          - devmachine_keyd_binary_path | length > 0
+        fail_msg: "keyd package is installed but no keyd binary was found."
+
     - name: Ensure keyd configuration directory exists
       ansible.builtin.file:
         path: /etc/keyd
@@ -43,14 +78,27 @@
         group: root
         mode: "0755"
 
+    - name: Assert keyd keyboard ids are configured when swap is enabled
+      ansible.builtin.assert:
+        that:
+          - not devmachine_keyd_swap_grave_102nd or (devmachine_keyd_keyboard_ids | length > 0)
+        fail_msg: "Set devmachine_keyd_keyboard_ids before enabling devmachine_keyd_swap_grave_102nd."
+
     - name: Install keyd default configuration
       ansible.builtin.copy:
         dest: "{{ devmachine_keyd_config_path }}"
         owner: root
         group: root
         mode: "0644"
-        content: "{{ devmachine_keyd_default_config }}"
-      when: devmachine_keyd_default_config | trim | length > 0
+        content: >-
+          {{
+            devmachine_keyd_default_config
+            if (devmachine_keyd_default_config | trim | length > 0)
+            else devmachine_keyd_swap_grave_102nd_config
+          }}
+      when: >
+        (devmachine_keyd_default_config | trim | length > 0)
+        or devmachine_keyd_swap_grave_102nd
       notify: Reload keyd
 
     - name: Enable and start keyd
@@ -80,8 +128,18 @@
         fail_msg: "keyd service was not found."
         success_msg: "keyd service is available."
 
+    - name: Verify keyd binary
+      ansible.builtin.command:
+        argv:
+          - "{{ devmachine_keyd_binary_path }}"
+          - --version
+      register: devmachine_keyd_version
+      changed_when: false
+
   handlers:
     - name: Reload keyd
       ansible.builtin.command:
-        cmd: keyd reload
+        argv:
+          - "{{ devmachine_keyd_binary_path }}"
+          - reload
       changed_when: true

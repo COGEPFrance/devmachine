@@ -2,71 +2,103 @@
   hosts: devs
   become: true
   vars:
-    lm_studio_appimage_url: "https://lmstudio.ai/download/latest/linux/x64"
-    lm_studio_install_dir: "/opt/lm-studio"
-    lm_studio_appimage_path: "{{ lm_studio_install_dir }}/LM-Studio.AppImage"
-    lm_studio_launcher_path: "/usr/local/bin/lm-studio"
-    lm_studio_desktop_path: "/usr/share/applications/lm-studio.desktop"
+    lm_studio_version: "0.4.12"
+    lm_studio_build: "1"
+    lm_studio_arch: x64
+    lm_studio_deb_sha512: "acfb807120bb1930633dc768606141f7bd7ece826b333313942b28d8c8d25229bc70b7ef13c4657dc20927e253d10ee6583bf45855460e8329fa7a7527491426"
+    lm_studio_deb_filename: "LM-Studio-{{ lm_studio_version }}-{{ lm_studio_build }}-{{ lm_studio_arch }}.deb"
+    lm_studio_deb_url: "https://installers.lmstudio.ai/linux/{{ lm_studio_arch }}/{{ lm_studio_version }}-{{ lm_studio_build }}/{{ lm_studio_deb_filename }}"
+    lm_studio_deb_path: "/tmp/{{ lm_studio_deb_filename }}"
+    lm_studio_legacy_install_dir: /opt/lm-studio
+    lm_studio_legacy_launcher_path: /usr/local/bin/lm-studio
+    lm_studio_legacy_desktop_path: /usr/share/applications/lm-studio.desktop
 
   tasks:
-    - name: Assert target is supported amd64
+    - name: Assert target is supported Ubuntu amd64
       ansible.builtin.assert:
         that:
+          - ansible_distribution == "Ubuntu"
           - ansible_architecture == "x86_64"
-        fail_msg: "This LM Studio playbook installs the x64 AppImage and requires amd64/x86_64."
+        fail_msg: "This LM Studio playbook installs the official x64 Debian package and requires Ubuntu on amd64/x86_64."
 
     - name: Install package prerequisites
       ansible.builtin.apt:
-        name: ca-certificates
+        name:
+          - ca-certificates
+          - desktop-file-utils
         state: present
         update_cache: true
 
-    - name: Create LM Studio installation directory
-      ansible.builtin.file:
-        path: "{{ lm_studio_install_dir }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
-
-    - name: Download LM Studio AppImage
+    - name: Download LM Studio Debian package
       ansible.builtin.get_url:
-        url: "{{ lm_studio_appimage_url }}"
-        dest: "{{ lm_studio_appimage_path }}"
-        mode: "0755"
-
-    - name: Install LM Studio launcher
-      ansible.builtin.copy:
-        dest: "{{ lm_studio_launcher_path }}"
-        owner: root
-        group: root
-        mode: "0755"
-        content: |
-          #!/usr/bin/env sh
-          exec {{ lm_studio_appimage_path }} "$@"
-
-    - name: Install LM Studio desktop entry
-      ansible.builtin.copy:
-        dest: "{{ lm_studio_desktop_path }}"
-        owner: root
-        group: root
+        url: "{{ lm_studio_deb_url }}"
+        dest: "{{ lm_studio_deb_path }}"
+        checksum: "sha512:{{ lm_studio_deb_sha512 }}"
         mode: "0644"
-        content: |
-          [Desktop Entry]
-          Type=Application
-          Name=LM Studio
-          Exec={{ lm_studio_launcher_path }}
-          Terminal=false
-          Categories=Development;Utility;
+        timeout: 300
 
-    - name: Verify LM Studio AppImage is installed
-      ansible.builtin.stat:
-        path: "{{ lm_studio_appimage_path }}"
-      register: lm_studio_appimage
+    - name: Read LM Studio Debian package name
+      ansible.builtin.command:
+        argv:
+          - dpkg-deb
+          - --field
+          - "{{ lm_studio_deb_path }}"
+          - Package
+      register: lm_studio_deb_package_name
+      changed_when: false
 
-    - name: Assert LM Studio AppImage is present
+    - name: Check owner of previous LM Studio desktop entry
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - --search
+          - "{{ lm_studio_legacy_desktop_path }}"
+      register: lm_studio_legacy_desktop_owner
+      failed_when: false
+      changed_when: false
+
+    - name: Remove previous LM Studio AppImage installation directory
+      ansible.builtin.file:
+        path: "{{ lm_studio_legacy_install_dir }}"
+        state: absent
+
+    - name: Remove previous LM Studio AppImage launcher
+      ansible.builtin.file:
+        path: "{{ lm_studio_legacy_launcher_path }}"
+        state: absent
+
+    - name: Remove previous LM Studio AppImage desktop entry
+      ansible.builtin.file:
+        path: "{{ lm_studio_legacy_desktop_path }}"
+        state: absent
+      when: lm_studio_legacy_desktop_owner.rc != 0
+
+    - name: Install LM Studio Debian package
+      ansible.builtin.apt:
+        deb: "{{ lm_studio_deb_path }}"
+        state: present
+
+    - name: Update desktop application database
+      ansible.builtin.command:
+        cmd: update-desktop-database /usr/share/applications
+      changed_when: false
+
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: List installed LM Studio package files
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - --listfiles
+          - "{{ lm_studio_deb_package_name.stdout }}"
+      register: lm_studio_installed_files
+      changed_when: false
+
+    - name: Assert LM Studio Debian package is installed
       ansible.builtin.assert:
         that:
-          - lm_studio_appimage.stat.exists
-          - lm_studio_appimage.stat.executable
-        fail_msg: "LM Studio AppImage is not installed or not executable."
+          - lm_studio_deb_package_name.stdout in ansible_facts.packages
+          - lm_studio_installed_files.stdout is search('/usr/share/applications/.*\\.desktop')
+        fail_msg: "LM Studio Debian package is not installed correctly."

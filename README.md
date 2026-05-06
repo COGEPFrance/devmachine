@@ -129,6 +129,12 @@ Identifier les touches et périphériques :
 sudo keyd monitor
 ```
 
+Sur certaines installations Ubuntu, le binaire est nommé `keyd.rvaiya` au lieu de `keyd`. Si `sudo keyd monitor` répond `commande introuvable`, utiliser :
+
+```sh
+sudo keyd.rvaiya monitor
+```
+
 Pour observer les événements bruts du clavier, arrêter temporairement le service :
 
 ```sh
@@ -137,7 +143,38 @@ sudo keyd monitor
 sudo systemctl start keyd
 ```
 
+Remplacer `keyd` par `keyd.rvaiya` dans cette commande si nécessaire.
+
 Un mapping pourra ensuite être ajouté via `devmachine_keyd_default_config`.
+
+Pour ton cas Logitech MX Keys Mac, le symptôme observé est :
+
+```text
+Touche physique | Résultat actuel | Résultat attendu
+@               | <               | @
+<               | @               | <
+```
+
+Cela correspond normalement à un échange des touches keyd `grave` et `102nd`. Ne pas appliquer ce mapping avec `[ids] *`, sinon le clavier intégré du portable sera aussi modifié.
+
+Configuration recommandée après récupération de l'ID du clavier externe avec `sudo keyd monitor` ou `sudo keyd.rvaiya monitor` :
+
+```yaml
+devmachine_keyd_keyboard_ids:
+  - "046d:XXXX"
+devmachine_keyd_swap_grave_102nd: true
+```
+
+Le playbook générera alors une configuration équivalente à :
+
+```ini
+[ids]
+046d:XXXX
+
+[main]
+grave = 102nd
+102nd = grave
+```
 
 ## Zsh
 
@@ -274,6 +311,8 @@ ansible-playbook -i inventory.yaml packages/base.yaml --ask-become-pass
 
 - ollama
 - lm-studio
+
+LM Studio est installé via le paquet Debian officiel fourni par `lmstudio.ai`. Le playbook télécharge `LM-Studio-0.4.12-1-x64.deb`, vérifie son checksum SHA-512, supprime les anciens artefacts AppImage créés précédemment dans `/opt/lm-studio` et `/usr/local/bin/lm-studio`, puis installe le paquet avec `apt`.
 
 ```sh
 ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass

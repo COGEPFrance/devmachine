@@ -7,12 +7,15 @@ devs:
       devmachine_end_user: "killian"
       # devmachine_end_user_password_hash: "$y$j9T$..."
       # devmachine_base_extra_packages: []
-      # devmachine_keyd_ppa: ppa:keyd-team/ppa
+      devmachine_keyd_ppa: ppa:keyd-team/ppa
       # devmachine_keyd_default_config: ""
+      devmachine_keyd_keyboard_ids:
+        - "046d:b36a:75de92f6"
+      devmachine_keyd_swap_grave_102nd: true
       # devmachine_docker_extra_users: []
       # devmachine_zsh_extra_users: []
-      # devmachine_zsh_set_default_shell: true
-      # devmachine_zsh_configure_zshrc: true
-      # devmachine_gnome_extensions_user: killian
-      # devmachine_gnome_clipboard_indicator_version: gnome46
-      # keeper_snap_channel: latest/stable
+      devmachine_zsh_set_default_shell: true
+      devmachine_zsh_configure_zshrc: true
+      devmachine_gnome_extensions_user: killian
+      devmachine_gnome_clipboard_indicator_version: gnome46
+      keeper_snap_channel: latest/stable
