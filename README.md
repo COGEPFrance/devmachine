@@ -300,7 +300,6 @@ ansible-playbook -i inventory.yaml packages/infra.yaml --ask-become-pass
 - zsh
 - gnome-clipboard-indicator
 - keeper
-- teams
 - google-chrome
 
 ```sh

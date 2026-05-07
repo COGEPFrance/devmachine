@@ -14,7 +14,5 @@
   import_playbook: ../playbooks/gnome-clipboard-indicator/playbook.yaml
 - name: Install Keeper Password Manager
   import_playbook: ../playbooks/keeper/playbook.yaml
-- name: Install Teams
-  import_playbook: ../playbooks/teams/playbook.yaml
 - name: Install Google Chrome
   import_playbook: ../playbooks/google-chrome/playbook.yaml
