@@ -2,21 +2,34 @@
   hosts: devs
   become: true
   vars:
-    falcon_sensor_url: "XXX"
-    falcon_sensor_deb_name: "falcon-sensor_7.34.0-18708_amd64.deb"
-    falcon_sensor_deb_path: "/tmp/{{ falcon_sensor_deb_name }}"
+    falcon_sensor_deb_name: "falcon-sensor_7.36.0-18909_amd64.deb"
+    falcon_sensor_deb_src: "{{ playbook_dir }}/files/{{ falcon_sensor_deb_name }}"
+    falcon_sensor_deb_dest: "/tmp/{{ falcon_sensor_deb_name }}"
     falcon_cid: "d1823c556234466ab01b47a7e6c06f2d-DB"
     falcon_provisioning_token: "A37C0956"
   tasks:
-    - name: Download Falcon Sensor package
-      ansible.builtin.get_url:
-        url: "{{ falcon_sensor_url }}"
-        dest: "{{ falcon_sensor_deb_path }}"
+    - name: Check Falcon Sensor package is available locally
+      ansible.builtin.stat:
+        path: "{{ falcon_sensor_deb_src }}"
+      delegate_to: localhost
+      become: false
+      register: falcon_sensor_deb
+
+    - name: Assert Falcon Sensor package is available locally
+      ansible.builtin.assert:
+        that:
+          - falcon_sensor_deb.stat.exists
+        fail_msg: "Place {{ falcon_sensor_deb_name }} in playbooks/crowdstrike/files before running this playbook."
+
+    - name: Copy Falcon Sensor package
+      ansible.builtin.copy:
+        src: "{{ falcon_sensor_deb_src }}"
+        dest: "{{ falcon_sensor_deb_dest }}"
         mode: "0644"
 
     - name: Install Falcon Sensor package
       ansible.builtin.apt:
-        deb: "{{ falcon_sensor_deb_path }}"
+        deb: "{{ falcon_sensor_deb_dest }}"
 
     - name: Configure Falcon Sensor CID and provisioning token
       ansible.builtin.command:

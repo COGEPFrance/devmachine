@@ -2,23 +2,16 @@
   hosts: devs
   become: true
   vars:
-    devmachine_keyd_ppa: ppa:keyd-team/ppa
-    devmachine_keyd_packages:
+    devmachine_keyd_ppa_default: ppa:keyd-team/ppa
+    devmachine_keyd_packages_default:
       - keyd
-    devmachine_keyd_config_path: /etc/keyd/default.conf
-    devmachine_keyd_default_config: ""
-    devmachine_keyd_binary_candidates:
+    devmachine_keyd_config_path_default: /etc/keyd/default.conf
+    devmachine_keyd_default_config_default: ""
+    devmachine_keyd_binary_candidates_default:
       - /usr/bin/keyd
       - /usr/bin/keyd.rvaiya
-    devmachine_keyd_keyboard_ids: []
-    devmachine_keyd_swap_grave_102nd: false
-    devmachine_keyd_swap_grave_102nd_config: |
-      [ids]
-      {{ devmachine_keyd_keyboard_ids | join('\n') }}
-
-      [main]
-      grave = 102nd
-      102nd = grave
+    devmachine_keyd_keyboard_ids_default: []
+    devmachine_keyd_swap_grave_102nd_default: false
 
   tasks:
     - name: Assert target is supported Ubuntu
@@ -26,6 +19,16 @@
         that:
           - ansible_distribution == "Ubuntu"
         fail_msg: "keyd PPA installation requires an Ubuntu target."
+
+    - name: Resolve keyd configuration variables
+      ansible.builtin.set_fact:
+        devmachine_keyd_resolved_ppa: "{{ devmachine_keyd_ppa | default(devmachine_keyd_ppa_default) }}"
+        devmachine_keyd_resolved_packages: "{{ devmachine_keyd_packages | default(devmachine_keyd_packages_default) }}"
+        devmachine_keyd_resolved_config_path: "{{ devmachine_keyd_config_path | default(devmachine_keyd_config_path_default) }}"
+        devmachine_keyd_resolved_default_config: "{{ devmachine_keyd_default_config | default(devmachine_keyd_default_config_default) }}"
+        devmachine_keyd_resolved_binary_candidates: "{{ devmachine_keyd_binary_candidates | default(devmachine_keyd_binary_candidates_default) }}"
+        devmachine_keyd_resolved_keyboard_ids: "{{ devmachine_keyd_keyboard_ids | default(devmachine_keyd_keyboard_ids_default) }}"
+        devmachine_keyd_resolved_swap_grave_102nd: "{{ devmachine_keyd_swap_grave_102nd | default(devmachine_keyd_swap_grave_102nd_default) | bool }}"
 
     - name: Install keyd repository prerequisites
       ansible.builtin.apt:
@@ -38,19 +41,19 @@
 
     - name: Add keyd APT repository
       ansible.builtin.apt_repository:
-        repo: "{{ devmachine_keyd_ppa }}"
+        repo: "{{ devmachine_keyd_resolved_ppa }}"
         state: present
         update_cache: true
 
     - name: Install keyd packages
       ansible.builtin.apt:
-        name: "{{ devmachine_keyd_packages }}"
+        name: "{{ devmachine_keyd_resolved_packages }}"
         state: present
 
     - name: Check keyd binary candidates
       ansible.builtin.stat:
         path: "{{ item }}"
-      loop: "{{ devmachine_keyd_binary_candidates }}"
+      loop: "{{ devmachine_keyd_resolved_binary_candidates }}"
       register: devmachine_keyd_binary_candidate_stats
 
     - name: Resolve keyd binary path
@@ -81,24 +84,31 @@
     - name: Assert keyd keyboard ids are configured when swap is enabled
       ansible.builtin.assert:
         that:
-          - not devmachine_keyd_swap_grave_102nd or (devmachine_keyd_keyboard_ids | length > 0)
+          - not (devmachine_keyd_resolved_swap_grave_102nd | bool) or (devmachine_keyd_resolved_keyboard_ids | length > 0)
         fail_msg: "Set devmachine_keyd_keyboard_ids before enabling devmachine_keyd_swap_grave_102nd."
 
     - name: Install keyd default configuration
       ansible.builtin.copy:
-        dest: "{{ devmachine_keyd_config_path }}"
+        dest: "{{ devmachine_keyd_resolved_config_path }}"
         owner: root
         group: root
         mode: "0644"
-        content: >-
-          {{
-            devmachine_keyd_default_config
-            if (devmachine_keyd_default_config | trim | length > 0)
-            else devmachine_keyd_swap_grave_102nd_config
-          }}
+        content: |
+          {% if devmachine_keyd_resolved_default_config | trim | length > 0 -%}
+          {{ devmachine_keyd_resolved_default_config }}
+          {%- else -%}
+          [ids]
+          {% for keyboard_id in devmachine_keyd_resolved_keyboard_ids %}
+          {{ keyboard_id }}
+          {% endfor %}
+
+          [main]
+          grave = 102nd
+          102nd = grave
+          {% endif %}
       when: >
-        (devmachine_keyd_default_config | trim | length > 0)
-        or devmachine_keyd_swap_grave_102nd
+        (devmachine_keyd_resolved_default_config | trim | length > 0)
+        or (devmachine_keyd_resolved_swap_grave_102nd | bool)
       notify: Reload keyd
 
     - name: Enable and start keyd

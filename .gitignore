@@ -1,1 +1,4 @@
 .ansible/
+playbooks/crowdstrike/files/*.deb
+playbooks/ivanti-neurons/files/*.sh
+!playbooks/**/files/.gitkeep

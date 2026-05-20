@@ -1,0 +1,65 @@
+- name: Configure camera support
+  hosts: devs
+  become: true
+  vars:
+    devmachine_camera_ipu6_driver_package: libcamhal-ipu6epmtl
+    devmachine_camera_ipu6_packages:
+      - "{{ devmachine_camera_ipu6_driver_package }}"
+      - gstreamer1.0-icamera
+      - pipewire-libcamera
+      - gstreamer1.0-libcamera
+      - libcamera-tools
+      - libcamera-ipa
+      - libcamera-v4l2
+      - v4l2-relayd
+
+  tasks:
+    - name: Assert target uses APT
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "Camera playbook requires a Debian/Ubuntu target."
+
+    - name: Detect Ubuntu driver recommendations
+      ansible.builtin.command:
+        cmd: ubuntu-drivers devices
+      register: devmachine_camera_driver_recommendations
+      changed_when: false
+      failed_when: false
+
+    - name: Check Intel IPU6 camera driver package availability
+      ansible.builtin.command:
+        cmd: "apt-cache show {{ devmachine_camera_ipu6_driver_package }}"
+      register: devmachine_camera_ipu6_driver_package_available
+      changed_when: false
+      failed_when: false
+
+    - name: Install Intel IPU6 camera support
+      ansible.builtin.apt:
+        name: "{{ devmachine_camera_ipu6_packages }}"
+        state: present
+        update_cache: true
+      when:
+        - devmachine_camera_ipu6_driver_package in devmachine_camera_driver_recommendations.stdout
+        - devmachine_camera_ipu6_driver_package_available.rc == 0
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert Intel IPU6 camera support is installed when recommended
+      ansible.builtin.assert:
+        that:
+          - (devmachine_camera_ipu6_packages | difference(ansible_facts.packages.keys() | list) | length) == 0
+        fail_msg: "Some Intel IPU6 camera packages are not installed."
+        success_msg: "Intel IPU6 camera support is installed."
+      when:
+        - devmachine_camera_ipu6_driver_package in devmachine_camera_driver_recommendations.stdout
+        - devmachine_camera_ipu6_driver_package_available.rc == 0
+
+    - name: Report skipped Intel IPU6 camera support
+      ansible.builtin.debug:
+        msg: "Intel IPU6 camera support was not installed because the driver is not recommended or not available for this host."
+      when: >
+        devmachine_camera_ipu6_driver_package not in devmachine_camera_driver_recommendations.stdout
+        or devmachine_camera_ipu6_driver_package_available.rc != 0

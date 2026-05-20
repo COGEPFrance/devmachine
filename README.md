@@ -176,6 +176,20 @@ grave = 102nd
 102nd = grave
 ```
 
+## Camera
+
+Le playbook `playbooks/camera/playbook.yaml` installe la pile caméra pour les postes Ubuntu/Dell avec caméra Intel IPU6 quand `ubuntu-drivers` recommande le driver `libcamhal-ipu6epmtl`.
+
+Il installe notamment le HAL IPU6 Dell, l'intégration PipeWire/libcamera, les plugins GStreamer et `v4l2-relayd` pour exposer la caméra aux applications qui attendent une webcam V4L2 classique.
+
+Installer le support caméra seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/camera/playbook.yaml --ask-become-pass
+```
+
+Après installation, redémarrer le poste ou fermer et rouvrir la session graphique, puis tester la caméra depuis l'application GNOME Camera ou depuis le navigateur.
+
 ## Zsh
 
 Le playbook `playbooks/zsh/playbook.yaml` installe Zsh pour la machine entière, puis configure les comptes existants suivants :
@@ -287,7 +301,12 @@ Les packages sont des playbooks d'agrégation. Ils commencent tous par `playbook
 - intune
 - ivanti-neurons
 
-Avant d'exécuter ce package, déposer le script Ivanti Neurons dans `playbooks/ivanti-neurons/files/ivanticloudagent-installer-ubuntu24.sh`.
+Les installateurs Falcon et Ivanti Neurons sont volumineux et ne sont pas versionnés dans Git. Avant d'exécuter ce package, les télécharger depuis les portails éditeurs, puis les déposer dans ces chemins :
+
+- `playbooks/crowdstrike/files/falcon-sensor_7.36.0-18909_amd64.deb`
+- `playbooks/ivanti-neurons/files/ivanticloudagent-installer-ubuntu24.sh`
+
+Si une nouvelle version du paquet Falcon est utilisée, mettre à jour `falcon_sensor_deb_name` dans `playbooks/crowdstrike/playbook.yaml`.
 
 ```sh
 ansible-playbook -i inventory.yaml packages/infra.yaml --ask-become-pass
