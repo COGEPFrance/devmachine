@@ -1,0 +1,95 @@
+- name: Install GitHub CLI
+  hosts: devs
+  become: true
+  vars:
+    github_cli_key_url: "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
+    github_cli_keyring_path: "/etc/apt/keyrings/githubcli-archive-keyring.gpg"
+    github_cli_sources_path: "/etc/apt/sources.list.d/github-cli.sources"
+    github_cli_legacy_repo_path: "/etc/apt/sources.list.d/github-cli.list"
+    github_cli_keyring_sha256: "6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b"
+    github_cli_arch_map:
+      i686: i386
+      x86_64: amd64
+      aarch64: arm64
+      armv7l: armhf
+      armv6l: armhf
+    github_cli_apt_arch: "{{ github_cli_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+    github_cli_supported_architectures:
+      - i386
+      - amd64
+      - arm64
+      - armhf
+
+  tasks:
+    - name: Assert target uses supported APT platform
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+          - github_cli_apt_arch in github_cli_supported_architectures
+        fail_msg: "GitHub CLI official APT repository requires Debian/Ubuntu/Raspberry Pi OS on i386, amd64, arm64 or armhf."
+
+    - name: Install GitHub CLI repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Ensure APT keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download GitHub CLI signing keyring
+      ansible.builtin.get_url:
+        url: "{{ github_cli_key_url }}"
+        dest: "{{ github_cli_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        checksum: "sha256:{{ github_cli_keyring_sha256 }}"
+
+    - name: Remove legacy GitHub CLI APT repository
+      ansible.builtin.file:
+        path: "{{ github_cli_legacy_repo_path }}"
+        state: absent
+
+    - name: Add GitHub CLI APT repository
+      ansible.builtin.copy:
+        dest: "{{ github_cli_sources_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: https://cli.github.com/packages
+          Suites: stable
+          Components: main
+          Architectures: {{ github_cli_apt_arch }}
+          Signed-By: {{ github_cli_keyring_path }}
+
+    - name: Install GitHub CLI
+      ansible.builtin.apt:
+        name: gh
+        state: present
+        update_cache: true
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert GitHub CLI package is installed
+      ansible.builtin.assert:
+        that:
+          - "'gh' in ansible_facts.packages"
+        fail_msg: "GitHub CLI package is not installed."
+        success_msg: "GitHub CLI package is installed."
+
+    - name: Verify GitHub CLI command
+      ansible.builtin.command:
+        cmd: gh --version
+      register: github_cli_version
+      changed_when: false

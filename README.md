@@ -190,15 +190,17 @@ ansible-playbook -i inventory.yaml playbooks/camera/playbook.yaml --ask-become-p
 
 Après installation, redémarrer le poste ou fermer et rouvrir la session graphique, puis tester la caméra depuis l'application GNOME Camera ou depuis le navigateur.
 
-## Zsh
+## Zsh / Oh My Zsh
 
-Le playbook `playbooks/zsh/playbook.yaml` installe Zsh pour la machine entière, puis configure les comptes existants suivants :
+Le playbook `playbooks/zsh/playbook.yaml` installe Zsh, Oh My Zsh et Powerlevel10k pour les comptes existants suivants :
 
 - `ansible_user`, donc `bigboss`
 - `devmachine_end_user`, si l'utilisateur final est renseigné et déjà créé
 - les comptes listés dans `devmachine_zsh_extra_users`, si besoin
 
-Par défaut, il définit Zsh comme shell de connexion et ajoute un bloc `.zshrc` minimal sans écraser le reste du fichier.
+Par défaut, il définit Zsh comme shell de connexion, clone Oh My Zsh, clone le thème Powerlevel10k, installe les fontes nécessaires au rendu powerline/font-awesome, et ajoute un bloc `.zshrc` managé sans écraser le reste du fichier.
+
+La configuration visuelle reprend le poste de référence : thème `powerlevel10k/powerlevel10k`, preset rainbow, prompt sur deux lignes, icônes petites, séparateurs verticaux, icône OS, état Git, temps d'exécution, environnements Python et heure. Les aliases, exports locaux, chemins personnels, fichiers `.env`, clés, tokens et accès SSH ne sont pas copiés.
 
 Variables utiles :
 
@@ -206,15 +208,22 @@ Variables utiles :
 devmachine_zsh_extra_users: []
 devmachine_zsh_set_default_shell: true
 devmachine_zsh_configure_zshrc: true
+devmachine_zsh_install_ohmyzsh: true
+devmachine_zsh_configure_powerlevel10k: true
+devmachine_zsh_reset_powerlevel10k_config: false
+devmachine_zsh_plugins:
+  - git
 ```
 
-Installer Zsh seul :
+`devmachine_zsh_reset_powerlevel10k_config: false` évite d'écraser une configuration `.p10k.zsh` déjà présente. Le passer temporairement à `true` permet de repartir du preset visuel du playbook.
+
+Installer Zsh / Oh My Zsh seul :
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/zsh/playbook.yaml --ask-become-pass
 ```
 
-Après installation, fermer et rouvrir la session pour utiliser le nouveau shell par défaut.
+Après installation, fermer et rouvrir la session pour utiliser le nouveau shell par défaut. Si les icônes ne s'affichent pas correctement, sélectionner une police compatible Powerline/Font Awesome dans le terminal.
 
 ## Docker
 
@@ -239,6 +248,22 @@ Après installation, fermer et rouvrir la session de l'utilisateur final pour qu
 ```sh
 docker run hello-world
 docker compose version
+```
+
+## GitHub CLI
+
+Le playbook `playbooks/github-cli/playbook.yaml` installe `gh` depuis le dépôt APT officiel GitHub CLI.
+
+Installer GitHub CLI seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/github-cli/playbook.yaml --ask-become-pass
+```
+
+Après installation, authentifier le compte GitHub depuis la session de l'utilisateur final :
+
+```sh
+gh auth login
 ```
 
 ## GNOME Clipboard Indicator
@@ -339,6 +364,7 @@ ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass
 ### Dev
 
 - docker
+- github-cli
 - vscode
 - obsidian
 - pycharm

@@ -6,6 +6,8 @@
   import_playbook: ../playbooks/user/playbook.yaml
 - name: Install Docker
   import_playbook: ../playbooks/docker/playbook.yaml
+- name: Install GitHub CLI
+  import_playbook: ../playbooks/github-cli/playbook.yaml
 - name: Install Visual Studio Code
   import_playbook: ../playbooks/vscode/playbook.yaml
 - name: Install Obsidian
