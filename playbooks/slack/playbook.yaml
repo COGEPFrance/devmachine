@@ -1,0 +1,68 @@
+- name: Install Slack
+  hosts: devs
+  become: true
+  vars:
+    slack_snap_name: slack
+    slack_snap_channel: latest/stable
+    slack_allow_existing_deb_package: false
+
+  tasks:
+    - name: Assert target uses APT
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "Slack snap playbook currently installs snapd with APT and requires a Debian/Ubuntu target."
+
+    - name: Install snapd
+      ansible.builtin.apt:
+        name: snapd
+        state: present
+        update_cache: true
+
+    - name: Ensure snapd service is running
+      ansible.builtin.systemd:
+        name: snapd
+        enabled: true
+        state: started
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Prevent duplicate Slack package managers
+      ansible.builtin.assert:
+        that:
+          - slack_allow_existing_deb_package or "'slack-desktop' not in ansible_facts.packages"
+        fail_msg: "slack-desktop is already installed as a Debian package. Remove it first, or set slack_allow_existing_deb_package=true if you intentionally want both."
+
+    - name: Verify snap command is available
+      ansible.builtin.command:
+        cmd: snap version
+      register: slack_snap_version
+      changed_when: false
+
+    - name: Check Slack snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ slack_snap_name }}"
+      register: slack_snap
+      changed_when: false
+      failed_when: false
+
+    - name: Install Slack snap
+      ansible.builtin.command:
+        cmd: "snap install {{ slack_snap_name }} --channel={{ slack_snap_channel }}"
+      when: slack_snap.rc != 0
+      changed_when: true
+
+    - name: Verify Slack snap installation
+      ansible.builtin.command:
+        cmd: "snap list {{ slack_snap_name }}"
+      register: slack_snap_after
+      changed_when: false
+
+    - name: Assert Slack is installed
+      ansible.builtin.assert:
+        that:
+          - slack_snap_after.rc == 0
+        fail_msg: "Slack snap is not installed."
+        success_msg: "Slack snap is installed."

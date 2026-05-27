@@ -296,6 +296,28 @@ Canal Snap par défaut :
 keeper_snap_channel: latest/stable
 ```
 
+## Slack
+
+Le playbook `playbooks/slack/playbook.yaml` installe Slack via Snap, avec le paquet officiel `slack`.
+
+Installer Slack seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/slack/playbook.yaml --ask-become-pass
+```
+
+Canal Snap par défaut :
+
+```yaml
+slack_snap_channel: latest/stable
+```
+
+Le playbook échoue si le paquet Debian `slack-desktop` est déjà installé, pour éviter d'avoir deux installations Slack gérées par deux gestionnaires de paquets différents. Pour forcer ce cas explicitement :
+
+```yaml
+slack_allow_existing_deb_package: true
+```
+
 ## Intune
 
 L'installation d'Intune se fait avec Ansible, mais l'enrôlement doit être fait depuis la session graphique de l'utilisateur final.
@@ -344,6 +366,7 @@ ansible-playbook -i inventory.yaml packages/infra.yaml --ask-become-pass
 - zsh
 - gnome-clipboard-indicator
 - keeper
+- slack
 - google-chrome
 
 ```sh
