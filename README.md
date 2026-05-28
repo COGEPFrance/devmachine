@@ -266,6 +266,18 @@ Après installation, authentifier le compte GitHub depuis la session de l'utilis
 gh auth login
 ```
 
+## MongoDB Compass
+
+Le playbook `playbooks/mongodb-compass/playbook.yaml` installe MongoDB Compass via le paquet Debian officiel fourni par MongoDB.
+
+Il cible Ubuntu 20.04 ou plus récent sur `amd64/x86_64` et télécharge `mongodb-compass_1.49.7_amd64.deb`.
+
+Installer MongoDB Compass seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/mongodb-compass/playbook.yaml --ask-become-pass
+```
+
 ## GNOME Clipboard Indicator
 
 Le playbook `playbooks/gnome-clipboard-indicator/playbook.yaml` installe l'extension GNOME Shell Clipboard Indicator depuis GitHub dans le profil utilisateur.
@@ -388,6 +400,7 @@ ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass
 
 - docker
 - github-cli
+- mongodb-compass
 - vscode
 - obsidian
 - pycharm

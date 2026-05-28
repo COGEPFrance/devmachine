@@ -8,6 +8,8 @@
   import_playbook: ../playbooks/docker/playbook.yaml
 - name: Install GitHub CLI
   import_playbook: ../playbooks/github-cli/playbook.yaml
+- name: Install MongoDB Compass
+  import_playbook: ../playbooks/mongodb-compass/playbook.yaml
 - name: Install Visual Studio Code
   import_playbook: ../playbooks/vscode/playbook.yaml
 - name: Install Obsidian

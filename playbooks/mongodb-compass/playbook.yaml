@@ -2,17 +2,19 @@
   hosts: devs
   become: true
   vars:
-    mongodb_compass_version: "1.49.5"
+    mongodb_compass_version: "1.49.7"
     mongodb_compass_deb_name: "mongodb-compass_{{ mongodb_compass_version }}_amd64.deb"
     mongodb_compass_deb_url: "https://downloads.mongodb.com/compass/{{ mongodb_compass_deb_name }}"
     mongodb_compass_deb_path: "/tmp/{{ mongodb_compass_deb_name }}"
 
   tasks:
-    - name: Assert target is supported amd64
+    - name: Assert target is supported Ubuntu amd64
       ansible.builtin.assert:
         that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_major_version | int >= 20
           - ansible_architecture == "x86_64"
-        fail_msg: "MongoDB Compass Debian package requires amd64/x86_64."
+        fail_msg: "MongoDB Compass Debian package requires Ubuntu 20.04+ on amd64/x86_64."
 
     - name: Install package prerequisites
       ansible.builtin.apt:
@@ -29,9 +31,15 @@
     - name: Install MongoDB Compass Debian package
       ansible.builtin.apt:
         deb: "{{ mongodb_compass_deb_path }}"
+        state: present
 
-    - name: Verify MongoDB Compass installation
-      ansible.builtin.command:
-        cmd: mongodb-compass --version
-      register: mongodb_compass_installed_version
-      changed_when: false
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert MongoDB Compass package is installed
+      ansible.builtin.assert:
+        that:
+          - "'mongodb-compass' in ansible_facts.packages"
+        fail_msg: "MongoDB Compass package is not installed"
+        success_msg: "MongoDB Compass package is installed"
