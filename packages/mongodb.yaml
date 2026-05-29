@@ -4,17 +4,7 @@
   import_playbook: ../playbooks/ansible-user/playbook.yaml
 - name: Configure end user
   import_playbook: ../playbooks/user/playbook.yaml
-- name: Install Docker
-  import_playbook: ../playbooks/docker/playbook.yaml
-- name: Install GitHub CLI
-  import_playbook: ../playbooks/github-cli/playbook.yaml
 - name: Install MongoDB Compass
   import_playbook: ../playbooks/mongodb-compass/playbook.yaml
 - name: Install MongoDB Database Tools
   import_playbook: ../playbooks/mongodb-database-tools/playbook.yaml
-- name: Install Visual Studio Code
-  import_playbook: ../playbooks/vscode/playbook.yaml
-- name: Install Obsidian
-  import_playbook: ../playbooks/obsidian/playbook.yaml
-- name: Install PyCharm
-  import_playbook: ../playbooks/pycharm/playbook.yaml

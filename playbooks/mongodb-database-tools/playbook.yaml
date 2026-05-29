@@ -1,0 +1,64 @@
+- name: Install MongoDB Database Tools
+  hosts: devs
+  become: true
+  vars:
+    mongodb_database_tools_version: "100.17.0"
+    mongodb_database_tools_supported_ubuntu_platforms:
+      "20.04": ubuntu2004
+      "22.04": ubuntu2204
+      "24.04": ubuntu2404
+    mongodb_database_tools_arch_map:
+      x86_64: x86_64
+      aarch64: arm64
+      arm64: arm64
+    mongodb_database_tools_platform: "{{ mongodb_database_tools_supported_ubuntu_platforms[ansible_distribution_version] | default('') }}"
+    mongodb_database_tools_arch: "{{ mongodb_database_tools_arch_map[ansible_architecture] | default('') }}"
+    mongodb_database_tools_deb_name: "mongodb-database-tools-{{ mongodb_database_tools_platform }}-{{ mongodb_database_tools_arch }}-{{ mongodb_database_tools_version }}.deb"
+    mongodb_database_tools_deb_url: "https://fastdl.mongodb.org/tools/db/{{ mongodb_database_tools_deb_name }}"
+    mongodb_database_tools_deb_path: "/tmp/{{ mongodb_database_tools_deb_name }}"
+    mongodb_database_tools_required_binaries:
+      - mongodump
+      - mongorestore
+
+  tasks:
+    - name: Assert target is supported Ubuntu architecture
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version in mongodb_database_tools_supported_ubuntu_platforms
+          - mongodb_database_tools_arch | length > 0
+        fail_msg: "MongoDB Database Tools {{ mongodb_database_tools_version }} requires Ubuntu 20.04, 22.04 or 24.04 on amd64/x86_64 or arm64."
+
+    - name: Install package prerequisites
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Download MongoDB Database Tools Debian package
+      ansible.builtin.get_url:
+        url: "{{ mongodb_database_tools_deb_url }}"
+        dest: "{{ mongodb_database_tools_deb_path }}"
+        mode: "0644"
+
+    - name: Install MongoDB Database Tools Debian package
+      ansible.builtin.apt:
+        deb: "{{ mongodb_database_tools_deb_path }}"
+        state: present
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert MongoDB Database Tools package is installed
+      ansible.builtin.assert:
+        that:
+          - "'mongodb-database-tools' in ansible_facts.packages"
+        fail_msg: "MongoDB Database Tools package is not installed"
+        success_msg: "MongoDB Database Tools package is installed"
+
+    - name: Verify required MongoDB Database Tools binaries
+      ansible.builtin.command: "{{ item }} --version"
+      loop: "{{ mongodb_database_tools_required_binaries }}"
+      register: mongodb_database_tools_binary_versions
+      changed_when: false

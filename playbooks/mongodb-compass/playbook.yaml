@@ -2,7 +2,7 @@
   hosts: devs
   become: true
   vars:
-    mongodb_compass_version: "1.49.7"
+    mongodb_compass_version: "1.49.8"
     mongodb_compass_deb_name: "mongodb-compass_{{ mongodb_compass_version }}_amd64.deb"
     mongodb_compass_deb_url: "https://downloads.mongodb.com/compass/{{ mongodb_compass_deb_name }}"
     mongodb_compass_deb_path: "/tmp/{{ mongodb_compass_deb_name }}"

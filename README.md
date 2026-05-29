@@ -266,16 +266,30 @@ Après installation, authentifier le compte GitHub depuis la session de l'utilis
 gh auth login
 ```
 
-## MongoDB Compass
+## MongoDB
 
 Le playbook `playbooks/mongodb-compass/playbook.yaml` installe MongoDB Compass via le paquet Debian officiel fourni par MongoDB.
 
-Il cible Ubuntu 20.04 ou plus récent sur `amd64/x86_64` et télécharge `mongodb-compass_1.49.7_amd64.deb`.
+Il cible Ubuntu 20.04 ou plus récent sur `amd64/x86_64` et télécharge `mongodb-compass_1.49.8_amd64.deb`.
+
+Le playbook `playbooks/mongodb-database-tools/playbook.yaml` installe MongoDB Database Tools. Il fournit notamment `mongodump` et `mongorestore`, cible Ubuntu 20.04, 22.04 ou 24.04 sur `amd64/x86_64` ou `arm64`, et télécharge la version `100.17.0`.
 
 Installer MongoDB Compass seul :
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/mongodb-compass/playbook.yaml --ask-become-pass
+```
+
+Installer MongoDB Database Tools seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/mongodb-database-tools/playbook.yaml --ask-become-pass
+```
+
+Installer le lot MongoDB complet :
+
+```sh
+ansible-playbook -i inventory.yaml packages/mongodb.yaml --ask-become-pass
 ```
 
 ## GNOME Clipboard Indicator
@@ -396,11 +410,23 @@ LM Studio est installé via le paquet Debian officiel fourni par `lmstudio.ai`. 
 ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass
 ```
 
+### MongoDB
+
+- mongodb-compass
+- mongodb-database-tools
+
+Ce package installe MongoDB Compass avec les outils CLI MongoDB Database Tools, dont `mongodump` et `mongorestore`.
+
+```sh
+ansible-playbook -i inventory.yaml packages/mongodb.yaml --ask-become-pass
+```
+
 ### Dev
 
 - docker
 - github-cli
 - mongodb-compass
+- mongodb-database-tools
 - vscode
 - obsidian
 - pycharm
