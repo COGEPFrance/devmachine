@@ -190,6 +190,39 @@ ansible-playbook -i inventory.yaml playbooks/camera/playbook.yaml --ask-become-p
 
 Après installation, redémarrer le poste ou fermer et rouvrir la session graphique, puis tester la caméra depuis l'application GNOME Camera ou depuis le navigateur.
 
+## NVMe KIOXIA BG6 (Dell)
+
+Les postes Dell équipés d'un NVMe KIOXIA BG6 derrière Intel VMD souffrent de I/O timeouts répétés sous Linux, qui font tomber le débit du disque autour de 45 Mo/s au lieu des 2000+ Mo/s attendus. Le symptôme typique : `npm install`, `apt`, ou tout I/O important rame énormément.
+
+Diagnostic :
+
+```sh
+# Le NVMe apparaît sous un domaine PCIe 10000:, signe que VMD est actif
+lspci | grep -i "non-volatile"
+
+# Timeouts NVMe en pagaille dans dmesg
+sudo dmesg | grep -i "nvme.*timeout" | wc -l
+
+# Débit anormalement bas
+sudo hdparm -Tt /dev/nvme0n1
+```
+
+Si `lspci` montre une adresse type `10000:e1:00.0` et que `dmesg` remonte des `nvme0: I/O tag X QID Y timeout`, le poste est concerné.
+
+Correction : désactiver Intel VMD dans le BIOS. VMD est une couche conçue pour Intel RST sur Windows, elle n'apporte rien sous Linux et provoque ces timeouts. La désactivation est sans risque côté boot tant que `/etc/fstab` utilise des UUID (cas par défaut sur Ubuntu chiffré).
+
+1. Reboot puis touche `F2` au logo Dell pour entrer dans le BIOS.
+2. Localiser l'option, le nom varie selon le modèle :
+   - `Storage` → `SATA/NVMe Operation` → passer de `RAID On` à `AHCI/NVMe`
+   - ou `System Configuration` → `VMD Technology` → `Disabled`
+   - ou `Advanced` → `Intel VMD` → `Disabled`
+3. Ignorer l'avertissement "This may prevent the OS from booting", il vise Windows.
+4. Save & Exit, saisir le mot de passe LUKS au prompt habituel.
+
+Après reboot, le NVMe doit apparaître sans le préfixe `10000:`, le débit doit dépasser 2000 Mo/s et `dmesg` ne doit plus remonter de timeouts.
+
+Côté kernel, conserver `nvme_core.default_ps_max_latency_us=0` dans `GRUB_CMDLINE_LINUX_DEFAULT` comme garde-fou contre les modes basse conso agressifs du NVMe.
+
 ## Zsh / Oh My Zsh
 
 Le playbook `playbooks/zsh/playbook.yaml` installe Zsh, Oh My Zsh et Powerlevel10k pour les comptes existants suivants :
