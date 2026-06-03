@@ -1,0 +1,11 @@
+devs:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_host: localhost
+      ansible_user: "{{ lookup('env', 'USER') }}"
+      devmachine_end_user: "{{ lookup('env', 'USER') }}"
+      # devmachine_ansible_user_github: TON_USERNAME_GITHUB
+      # devmachine_end_user_password_hash: "$y$j9T$..."
+      # devmachine_base_extra_packages: []
+      # devmachine_docker_extra_users: []

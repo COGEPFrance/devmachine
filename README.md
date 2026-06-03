@@ -2,7 +2,7 @@
 
 ## Pré-requis
 
-- Ansible doit être installé sur votre machine locale
+- Pour le premier lancement distant, Ansible doit être installé sur votre machine locale
 - Les hôtes cibles doivent être accessibles via SSH
 
 installation de ssh sur Ubuntu
@@ -37,6 +37,14 @@ cas d'utilisation avec sudo
 ```sh
 ansible-playbook -i inventory.yaml playbooks/update/playbook.yaml --ask-become-pass
 ```
+
+Cas d'utilisation depuis le poste cible lui-même, après installation des paquets de base :
+
+```sh
+ansible-playbook -i inventory-local.yaml packages/base.yaml --ask-become-pass
+```
+
+L'inventaire `inventory-local.yaml` utilise `ansible_connection: local` et conserve le groupe `devs`, ce qui permet de réutiliser les mêmes playbooks sans connexion SSH.
 
 ## Utilisateur final
 
@@ -92,6 +100,7 @@ Le playbook `playbooks/base-packages/playbook.yaml` installe les utilitaires com
 - vim
 - curl
 - git
+- ansible
 - tree
 - gnome-shell-extensions
 - python3-pip
@@ -111,6 +120,22 @@ Installer les paquets de base seuls :
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/base-packages/playbook.yaml --ask-become-pass
+```
+
+## LibreOffice
+
+Le playbook `playbooks/libreoffice/playbook.yaml` installe LibreOffice depuis les dépôts APT Ubuntu/Debian, avec le paquet de langue français.
+
+Ajouter des paquets LibreOffice au cas par cas :
+
+```yaml
+devmachine_libreoffice_extra_packages: []
+```
+
+Installer LibreOffice seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/libreoffice/playbook.yaml --ask-become-pass
 ```
 
 ## keyd

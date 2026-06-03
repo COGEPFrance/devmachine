@@ -1,0 +1,33 @@
+- name: Install LibreOffice
+  hosts: devs
+  become: true
+  vars:
+    devmachine_libreoffice_packages:
+      - libreoffice
+      - libreoffice-l10n-fr
+    devmachine_libreoffice_extra_packages: []
+    devmachine_libreoffice_packages_all: "{{ (devmachine_libreoffice_packages + devmachine_libreoffice_extra_packages) | unique | list }}"
+
+  tasks:
+    - name: Assert target uses APT
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "LibreOffice playbook requires a Debian/Ubuntu target."
+
+    - name: Install LibreOffice
+      ansible.builtin.apt:
+        name: "{{ devmachine_libreoffice_packages_all }}"
+        state: present
+        update_cache: true
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert LibreOffice packages are installed
+      ansible.builtin.assert:
+        that:
+          - (devmachine_libreoffice_packages_all | difference(ansible_facts.packages.keys() | list) | length) == 0
+        fail_msg: "Some LibreOffice packages are not installed."
+        success_msg: "LibreOffice packages are installed."
