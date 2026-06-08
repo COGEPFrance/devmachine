@@ -12,6 +12,9 @@
     lm_studio_legacy_install_dir: /opt/lm-studio
     lm_studio_legacy_launcher_path: /usr/local/bin/lm-studio
     lm_studio_legacy_desktop_path: /usr/share/applications/lm-studio.desktop
+    lm_studio_desktop_path: /usr/share/applications/lm-studio.desktop
+    lm_studio_install_dir: /opt/LM-Studio
+    lm_studio_binary_path: /opt/LM-Studio/lm-studio
 
   tasks:
     - name: Assert target is supported Ubuntu amd64
@@ -83,6 +86,36 @@
         cmd: update-desktop-database /usr/share/applications
       changed_when: false
 
+    - name: Read LM Studio desktop entry executable
+      ansible.builtin.command:
+        argv:
+          - awk
+          - -F=
+          - '$1 == "Exec" { print $2; exit }'
+          - "{{ lm_studio_desktop_path }}"
+      register: lm_studio_desktop_exec
+      changed_when: false
+
+    - name: Check LM Studio Debian executable
+      ansible.builtin.stat:
+        path: "{{ lm_studio_binary_path }}"
+      register: lm_studio_binary
+
+    - name: Check LM Studio Debian installation directory
+      ansible.builtin.stat:
+        path: "{{ lm_studio_install_dir }}"
+      register: lm_studio_install_dir_stat
+
+    - name: Check legacy LM Studio AppImage installation directory
+      ansible.builtin.stat:
+        path: "{{ lm_studio_legacy_install_dir }}"
+      register: lm_studio_legacy_install_dir_stat
+
+    - name: Check legacy LM Studio AppImage launcher
+      ansible.builtin.stat:
+        path: "{{ lm_studio_legacy_launcher_path }}"
+      register: lm_studio_legacy_launcher_stat
+
     - name: Gather package facts
       ansible.builtin.package_facts:
         manager: auto
@@ -101,4 +134,12 @@
         that:
           - lm_studio_deb_package_name.stdout in ansible_facts.packages
           - lm_studio_installed_files.stdout is search('/usr/share/applications/.*\\.desktop')
+          - lm_studio_install_dir_stat.stat.isdir
+          - lm_studio_install_dir_stat.stat.mode is search('[1357]$')
+          - lm_studio_binary.stat.exists
+          - lm_studio_binary.stat.executable
+          - lm_studio_binary.stat.mode is search('[1357]$')
+          - not lm_studio_legacy_install_dir_stat.stat.exists
+          - not lm_studio_legacy_launcher_stat.stat.exists
+          - lm_studio_desktop_exec.stdout is search('^/opt/LM-Studio/lm-studio( |$)')
         fail_msg: "LM Studio Debian package is not installed correctly."

@@ -382,7 +382,7 @@ keeper_snap_channel: latest/stable
 
 ## Slack
 
-Le playbook `playbooks/slack/playbook.yaml` installe Slack via Snap, avec le paquet officiel `slack`.
+Le playbook `playbooks/slack/playbook.yaml` installe Slack via le dépôt APT Slack/Packagecloud, avec le paquet officiel `slack-desktop`.
 
 Installer Slack seul :
 
@@ -390,16 +390,19 @@ Installer Slack seul :
 ansible-playbook -i inventory.yaml playbooks/slack/playbook.yaml --ask-become-pass
 ```
 
-Canal Snap par défaut :
+Le playbook retire par défaut le Snap `slack` s'il est déjà installé, pour éviter d'avoir deux installations Slack gérées par deux gestionnaires de paquets différents. Pour désactiver cette migration automatique :
 
 ```yaml
-slack_snap_channel: latest/stable
+slack_remove_existing_snap: false
 ```
 
-Le playbook échoue si le paquet Debian `slack-desktop` est déjà installé, pour éviter d'avoir deux installations Slack gérées par deux gestionnaires de paquets différents. Pour forcer ce cas explicitement :
+Le dépôt APT installé est :
 
 ```yaml
-slack_allow_existing_deb_package: true
+URIs: https://packagecloud.io/slacktechnologies/slack/debian/
+Suites: jessie
+Components: main
+Architectures: amd64
 ```
 
 ## Intune
@@ -463,6 +466,12 @@ ansible-playbook -i inventory.yaml packages/base.yaml --ask-become-pass
 - lm-studio
 
 LM Studio est installé via le paquet Debian officiel fourni par `lmstudio.ai`. Le playbook télécharge `LM-Studio-0.4.12-1-x64.deb`, vérifie son checksum SHA-512, supprime les anciens artefacts AppImage créés précédemment dans `/opt/lm-studio` et `/usr/local/bin/lm-studio`, puis installe le paquet avec `apt`.
+
+Si un poste a encore l'ancienne installation AppImage et échoue au lancement avec `Permission denied` sur `/opt/lm-studio/squashfs-root/AppRun`, relancer le playbook LM Studio avec élévation de privilèges pour migrer vers le paquet Debian :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/lm-studio/playbook.yaml --ask-become-pass
+```
 
 ```sh
 ansible-playbook -i inventory.yaml packages/ia.yaml --ask-become-pass
