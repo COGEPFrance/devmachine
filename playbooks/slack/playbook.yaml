@@ -2,44 +2,106 @@
   hosts: devs
   become: true
   vars:
+    slack_package_name: slack-desktop
     slack_snap_name: slack
-    slack_snap_channel: latest/stable
-    slack_allow_existing_deb_package: false
+    slack_remove_existing_snap: true
+    slack_key_url: "https://packagecloud.io/slacktechnologies/slack/gpgkey"
+    slack_key_fingerprint: "DB085A08CA13B8ACB917E0F6D938EC0D038651BD"
+    slack_key_tmp_path: "/tmp/slacktechnologies_slack.gpgkey"
+    slack_keyring_path: "/usr/share/keyrings/slacktechnologies_slack-archive-keyring.gpg"
+    slack_sources_path: "/etc/apt/sources.list.d/slack.sources"
+    slack_legacy_repo_paths:
+      - /etc/apt/sources.list.d/slack.list
+      - /etc/apt/sources.list.d/extrepo_slack.sources
+    slack_arch_map:
+      x86_64: amd64
+    slack_apt_arch: "{{ slack_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+    slack_supported_architectures:
+      - amd64
 
   tasks:
-    - name: Assert target uses APT
+    - name: Assert target uses supported APT platform
       ansible.builtin.assert:
         that:
           - ansible_os_family == "Debian"
-        fail_msg: "Slack snap playbook currently installs snapd with APT and requires a Debian/Ubuntu target."
+          - slack_apt_arch in slack_supported_architectures
+        fail_msg: "Slack desktop official Debian package requires a Debian/Ubuntu amd64 target."
 
-    - name: Install snapd
+    - name: Install Slack repository prerequisites
       ansible.builtin.apt:
-        name: snapd
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - gpg
         state: present
         update_cache: true
 
-    - name: Ensure snapd service is running
-      ansible.builtin.systemd:
-        name: snapd
-        enabled: true
-        state: started
+    - name: Download Slack Packagecloud signing key
+      ansible.builtin.get_url:
+        url: "{{ slack_key_url }}"
+        dest: "{{ slack_key_tmp_path }}"
+        mode: "0644"
+      register: slack_signing_key
 
-    - name: Collect package facts
-      ansible.builtin.package_facts:
-        manager: auto
+    - name: Check Slack keyring
+      ansible.builtin.stat:
+        path: "{{ slack_keyring_path }}"
+      register: slack_keyring
 
-    - name: Prevent duplicate Slack package managers
+    - name: Install Slack keyring
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - "{{ slack_keyring_path }}"
+          - "{{ slack_key_tmp_path }}"
+      when: slack_signing_key.changed or not slack_keyring.stat.exists
+      changed_when: true
+
+    - name: Ensure Slack keyring permissions
+      ansible.builtin.file:
+        path: "{{ slack_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Read Slack keyring fingerprint
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --show-keys
+          - --with-colons
+          - "{{ slack_keyring_path }}"
+      register: slack_keyring_fingerprints
+      changed_when: false
+
+    - name: Assert Slack keyring fingerprint
       ansible.builtin.assert:
         that:
-          - slack_allow_existing_deb_package or "'slack-desktop' not in ansible_facts.packages"
-        fail_msg: "slack-desktop is already installed as a Debian package. Remove it first, or set slack_allow_existing_deb_package=true if you intentionally want both."
+          - "'fpr:::::::::{{ slack_key_fingerprint }}:' in slack_keyring_fingerprints.stdout"
+        fail_msg: "Slack APT signing key fingerprint does not match the expected Packagecloud key."
 
-    - name: Verify snap command is available
-      ansible.builtin.command:
-        cmd: snap version
-      register: slack_snap_version
-      changed_when: false
+    - name: Remove legacy Slack APT repositories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ slack_legacy_repo_paths }}"
+
+    - name: Add Slack APT repository
+      ansible.builtin.copy:
+        dest: "{{ slack_sources_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: https://packagecloud.io/slacktechnologies/slack/debian/
+          Suites: jessie
+          Components: main
+          Architectures: {{ slack_apt_arch }}
+          Signed-By: {{ slack_keyring_path }}
 
     - name: Check Slack snap installation
       ansible.builtin.command:
@@ -48,21 +110,54 @@
       changed_when: false
       failed_when: false
 
-    - name: Install Slack snap
-      ansible.builtin.command:
-        cmd: "snap install {{ slack_snap_name }} --channel={{ slack_snap_channel }}"
-      when: slack_snap.rc != 0
-      changed_when: true
-
-    - name: Verify Slack snap installation
-      ansible.builtin.command:
-        cmd: "snap list {{ slack_snap_name }}"
-      register: slack_snap_after
-      changed_when: false
-
-    - name: Assert Slack is installed
+    - name: Prevent duplicate Slack package managers
       ansible.builtin.assert:
         that:
-          - slack_snap_after.rc == 0
-        fail_msg: "Slack snap is not installed."
-        success_msg: "Slack snap is installed."
+          - slack_remove_existing_snap or slack_snap.rc != 0
+        fail_msg: "Slack snap is already installed. Set slack_remove_existing_snap=true to migrate to slack-desktop, or remove it manually first."
+
+    - name: Remove existing Slack snap
+      ansible.builtin.command:
+        cmd: "snap remove {{ slack_snap_name }}"
+      when: slack_remove_existing_snap and slack_snap.rc == 0
+      changed_when: true
+
+    - name: Install Slack desktop
+      ansible.builtin.apt:
+        name: "{{ slack_package_name }}"
+        state: present
+        update_cache: true
+
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Assert Slack desktop package is installed
+      ansible.builtin.assert:
+        that:
+          - slack_package_name in ansible_facts.packages
+        fail_msg: "Slack desktop package is not installed."
+        success_msg: "Slack desktop package is installed."
+
+    - name: Verify Slack desktop package version
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - -W
+          - "-f=${Version}"
+          - "{{ slack_package_name }}"
+      register: slack_package_version
+      changed_when: false
+
+    - name: Verify Slack launcher exists
+      ansible.builtin.stat:
+        path: /usr/bin/slack
+      register: slack_launcher
+
+    - name: Assert Slack launcher exists
+      ansible.builtin.assert:
+        that:
+          - slack_launcher.stat.exists
+          - slack_launcher.stat.executable
+        fail_msg: "Slack launcher /usr/bin/slack is not installed or is not executable."
+        success_msg: "Slack launcher is installed."

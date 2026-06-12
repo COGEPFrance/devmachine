@@ -1,0 +1,129 @@
+- name: Configure GNOME Mac keybindings
+  hosts: devs
+  become: true
+  vars:
+    devmachine_gnome_mac_keybindings_enabled: "{{ devmachine_gnome_mac_keybindings | default(devmachine_keyd_mac_shortcuts | default(false)) | bool }}"
+    devmachine_gnome_mac_keybindings_user: >-
+      {{
+        devmachine_gnome_extensions_user
+        if (devmachine_gnome_extensions_user is defined and (devmachine_gnome_extensions_user | length > 0))
+        else (
+          devmachine_end_user
+          if (devmachine_end_user is defined and (devmachine_end_user | length > 0))
+          else ansible_user
+        )
+      }}
+    devmachine_gnome_mac_keybindings_values:
+      - schema: org.gnome.shell.keybindings
+        key: toggle-overview
+        value: "['<Super>space']"
+      - schema: org.gnome.desktop.wm.keybindings
+        key: switch-input-source
+        value: "@as []"
+      - schema: org.gnome.desktop.wm.keybindings
+        key: switch-input-source-backward
+        value: "@as []"
+      - schema: org.gnome.desktop.wm.keybindings
+        key: switch-applications
+        value: "['<Super>Tab', '<Alt>Tab']"
+      - schema: org.gnome.desktop.wm.keybindings
+        key: switch-applications-backward
+        value: "['<Shift><Super>Tab', '<Shift><Alt>Tab']"
+
+  tasks:
+    - name: Skip GNOME Mac keybindings when disabled
+      ansible.builtin.debug:
+        msg: "GNOME Mac keybindings are disabled."
+      when: not (devmachine_gnome_mac_keybindings_enabled | bool)
+
+    - name: Configure GNOME Mac keybindings
+      when: devmachine_gnome_mac_keybindings_enabled | bool
+      block:
+        - name: Install GNOME keybinding prerequisites
+          ansible.builtin.apt:
+            name:
+              - dbus-user-session
+              - libglib2.0-bin
+            state: present
+            update_cache: true
+
+        - name: Verify GNOME Shell is installed
+          ansible.builtin.command:
+            cmd: gnome-shell --version
+          register: devmachine_gnome_mac_keybindings_shell_version
+          changed_when: false
+          failed_when: false
+
+        - name: Assert GNOME Shell is available
+          ansible.builtin.assert:
+            that:
+              - devmachine_gnome_mac_keybindings_shell_version.rc == 0
+            fail_msg: "GNOME Shell is required to configure Mac keybindings."
+
+        - name: Read GNOME Mac keybindings user account information
+          ansible.builtin.getent:
+            database: passwd
+            key: "{{ devmachine_gnome_mac_keybindings_user }}"
+
+        - name: Resolve GNOME Mac keybindings user home
+          ansible.builtin.set_fact:
+            devmachine_gnome_mac_keybindings_home: "{{ ansible_facts.getent_passwd[devmachine_gnome_mac_keybindings_user][4] }}"
+
+        - name: Read current GNOME Mac keybindings
+          ansible.builtin.command:
+            argv:
+              - dbus-run-session
+              - --
+              - gsettings
+              - get
+              - "{{ item.schema }}"
+              - "{{ item.key }}"
+          become: true
+          become_user: "{{ devmachine_gnome_mac_keybindings_user }}"
+          environment:
+            HOME: "{{ devmachine_gnome_mac_keybindings_home }}"
+          loop: "{{ devmachine_gnome_mac_keybindings_values }}"
+          loop_control:
+            label: "{{ item.schema }} {{ item.key }}"
+          register: devmachine_gnome_mac_keybindings_current
+          changed_when: false
+
+        - name: Apply GNOME Mac keybindings
+          ansible.builtin.command:
+            argv:
+              - dbus-run-session
+              - --
+              - gsettings
+              - set
+              - "{{ item.item.schema }}"
+              - "{{ item.item.key }}"
+              - "{{ item.item.value }}"
+          become: true
+          become_user: "{{ devmachine_gnome_mac_keybindings_user }}"
+          environment:
+            HOME: "{{ devmachine_gnome_mac_keybindings_home }}"
+          loop: "{{ devmachine_gnome_mac_keybindings_current.results }}"
+          loop_control:
+            label: "{{ item.item.schema }} {{ item.item.key }}"
+          when: item.stdout != item.item.value
+          changed_when: true
+
+        - name: Verify GNOME Mac keybindings
+          ansible.builtin.command:
+            argv:
+              - dbus-run-session
+              - --
+              - gsettings
+              - get
+              - "{{ item.schema }}"
+              - "{{ item.key }}"
+          become: true
+          become_user: "{{ devmachine_gnome_mac_keybindings_user }}"
+          environment:
+            HOME: "{{ devmachine_gnome_mac_keybindings_home }}"
+          loop: "{{ devmachine_gnome_mac_keybindings_values }}"
+          loop_control:
+            label: "{{ item.schema }} {{ item.key }}"
+          register: devmachine_gnome_mac_keybindings_verify
+          changed_when: false
+          failed_when: devmachine_gnome_mac_keybindings_verify.stdout != item.value
