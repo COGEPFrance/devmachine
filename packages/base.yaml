@@ -8,6 +8,8 @@
   import_playbook: ../playbooks/base-packages/playbook.yaml
 - name: Install keyd
   import_playbook: ../playbooks/keyd/playbook.yaml
+- name: Configure GNOME Mac keybindings
+  import_playbook: ../playbooks/gnome-mac-keybindings/playbook.yaml
 - name: Install Zsh
   import_playbook: ../playbooks/zsh/playbook.yaml
 - name: Install GNOME Clipboard Indicator

@@ -12,6 +12,7 @@
       - /usr/bin/keyd.rvaiya
     devmachine_keyd_keyboard_ids_default: []
     devmachine_keyd_swap_grave_102nd_default: false
+    devmachine_keyd_mac_shortcuts_default: false
 
   tasks:
     - name: Assert target is supported Ubuntu
@@ -29,6 +30,12 @@
         devmachine_keyd_resolved_binary_candidates: "{{ devmachine_keyd_binary_candidates | default(devmachine_keyd_binary_candidates_default) }}"
         devmachine_keyd_resolved_keyboard_ids: "{{ devmachine_keyd_keyboard_ids | default(devmachine_keyd_keyboard_ids_default) }}"
         devmachine_keyd_resolved_swap_grave_102nd: "{{ devmachine_keyd_swap_grave_102nd | default(devmachine_keyd_swap_grave_102nd_default) | bool }}"
+        devmachine_keyd_resolved_mac_shortcuts: "{{ devmachine_keyd_mac_shortcuts | default(devmachine_keyd_mac_shortcuts_default) | bool }}"
+
+    - name: Resolve keyd configuration mode
+      ansible.builtin.set_fact:
+        devmachine_keyd_has_default_config: "{{ (devmachine_keyd_resolved_default_config | trim | length) > 0 }}"
+        devmachine_keyd_generated_config_enabled: "{{ (devmachine_keyd_resolved_swap_grave_102nd | bool) or (devmachine_keyd_resolved_mac_shortcuts | bool) }}"
 
     - name: Install keyd repository prerequisites
       ansible.builtin.apt:
@@ -81,11 +88,14 @@
         group: root
         mode: "0755"
 
-    - name: Assert keyd keyboard ids are configured when swap is enabled
+    - name: Assert keyd keyboard ids are configured for generated mappings
       ansible.builtin.assert:
         that:
-          - not (devmachine_keyd_resolved_swap_grave_102nd | bool) or (devmachine_keyd_resolved_keyboard_ids | length > 0)
-        fail_msg: "Set devmachine_keyd_keyboard_ids before enabling devmachine_keyd_swap_grave_102nd."
+          - >
+            (devmachine_keyd_has_default_config | bool)
+            or not (devmachine_keyd_generated_config_enabled | bool)
+            or (devmachine_keyd_resolved_keyboard_ids | length > 0)
+        fail_msg: "Set devmachine_keyd_keyboard_ids before enabling generated keyd mappings."
 
     - name: Install keyd default configuration
       ansible.builtin.copy:
@@ -103,12 +113,26 @@
           {% endfor %}
 
           [main]
+          {% if devmachine_keyd_resolved_swap_grave_102nd | bool %}
           grave = 102nd
           102nd = grave
           {% endif %}
+          {% if devmachine_keyd_resolved_mac_shortcuts | bool %}
+          leftmeta = layer(command)
+          rightmeta = layer(command)
+
+          [command:C]
+          tab = M-tab
+          space = M-space
+          left = home
+          right = end
+          up = C-home
+          down = C-end
+          {% endif %}
+          {% endif %}
       when: >
-        (devmachine_keyd_resolved_default_config | trim | length > 0)
-        or (devmachine_keyd_resolved_swap_grave_102nd | bool)
+        (devmachine_keyd_has_default_config | bool)
+        or (devmachine_keyd_generated_config_enabled | bool)
       notify: Reload keyd
 
     - name: Enable and start keyd

@@ -6,3 +6,5 @@
   import_playbook: ../playbooks/ollama/playbook.yaml
 - name: Install LM Studio
   import_playbook: ../playbooks/lm-studio/playbook.yaml
+- name: Install Claude Code
+  import_playbook: ../playbooks/claude-code/playbook.yaml

@@ -170,7 +170,7 @@ sudo systemctl start keyd
 
 Remplacer `keyd` par `keyd.rvaiya` dans cette commande si nécessaire.
 
-Un mapping pourra ensuite être ajouté via `devmachine_keyd_default_config`.
+Un mapping complet pourra ensuite être ajouté via `devmachine_keyd_default_config`. S'il est renseigné, il remplace la configuration générée par les options `devmachine_keyd_*`.
 
 Pour ton cas Logitech MX Keys Mac, le symptôme observé est :
 
@@ -188,6 +188,7 @@ Configuration recommandée après récupération de l'ID du clavier externe avec
 devmachine_keyd_keyboard_ids:
   - "046d:XXXX"
 devmachine_keyd_swap_grave_102nd: true
+devmachine_keyd_mac_shortcuts: true
 ```
 
 Le playbook générera alors une configuration équivalente à :
@@ -199,6 +200,24 @@ Le playbook générera alors une configuration équivalente à :
 [main]
 grave = 102nd
 102nd = grave
+leftmeta = layer(command)
+rightmeta = layer(command)
+
+[command:C]
+tab = M-tab
+space = M-space
+left = home
+right = end
+up = C-home
+down = C-end
+```
+
+Avec `devmachine_keyd_mac_shortcuts: true`, les touches Command gauche et droite du clavier ciblé deviennent le modificateur principal pour les raccourcis applicatifs : `CMD+C`, `CMD+V`, `CMD+Z`, `CMD+A`, `CMD+F`, etc. émettent les équivalents `Ctrl+...`. La touche `Ctrl` physique reste inchangée.
+
+Le playbook `playbooks/gnome-mac-keybindings/playbook.yaml` configure les raccourcis GNOME associés quand `devmachine_keyd_mac_shortcuts` est activé, notamment `Super+Space` pour l'overview/recherche GNOME et `Super+Tab` pour le switcher d'applications. Il peut être désactivé explicitement avec :
+
+```yaml
+devmachine_gnome_mac_keybindings: false
 ```
 
 ## Camera
@@ -464,6 +483,7 @@ ansible-playbook -i inventory.yaml packages/base.yaml --ask-become-pass
 
 - ollama
 - lm-studio
+- claude-code
 
 LM Studio est installé via le paquet Debian officiel fourni par `lmstudio.ai`. Le playbook télécharge `LM-Studio-0.4.12-1-x64.deb`, vérifie son checksum SHA-512, supprime les anciens artefacts AppImage créés précédemment dans `/opt/lm-studio` et `/usr/local/bin/lm-studio`, puis installe le paquet avec `apt`.
 
@@ -471,6 +491,24 @@ Si un poste a encore l'ancienne installation AppImage et échoue au lancement av
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/lm-studio/playbook.yaml --ask-become-pass
+```
+
+Le playbook `playbooks/claude-code/playbook.yaml` installe Claude Code CLI depuis les releases officielles Anthropic `https://downloads.claude.ai/claude-code-releases`. Le compte cible est `devmachine_end_user` si défini, sinon `ansible_user`.
+
+Il résout la version demandée, lit le manifest officiel, vérifie le checksum SHA-256, installe le binaire dans `~/.local/bin/claude`, ajoute `~/.local/bin` aux profils shell de l'utilisateur, puis expose aussi `claude` via `/usr/local/bin/claude` pour éviter les problèmes de `PATH` dans un nouveau terminal. La version Claude Code installée est `latest` par défaut, peut cibler `stable`, ou peut être figée si besoin :
+
+```yaml
+devmachine_claude_code_version: latest
+devmachine_claude_code_create_global_launcher: true
+devmachine_claude_code_install_desktop: true
+```
+
+À ce jour, l'application desktop officielle Claude Code n'est pas disponible sous Linux. Le playbook le signale explicitement et installe uniquement le CLI officiel, sans installer de port communautaire non maintenu par Anthropic.
+
+Installer Claude Code seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/claude-code/playbook.yaml --ask-become-pass
 ```
 
 ```sh

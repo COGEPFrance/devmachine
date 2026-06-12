@@ -1,0 +1,230 @@
+- name: Install Claude Code
+  hosts: devs
+  become: true
+  vars:
+    devmachine_claude_code_user: >-
+      {{
+        devmachine_end_user
+        if (devmachine_end_user is defined and (devmachine_end_user | length > 0))
+        else ansible_user
+      }}
+    devmachine_claude_code_version: latest
+    devmachine_claude_code_release_base_url: "https://downloads.claude.ai/claude-code-releases"
+    devmachine_claude_code_binary_path: "{{ devmachine_claude_code_home }}/.local/bin/claude"
+    devmachine_claude_code_global_binary_path: "/usr/local/bin/claude"
+    devmachine_claude_code_create_global_launcher: true
+    devmachine_claude_code_configure_shell_path: true
+    devmachine_claude_code_install_desktop: true
+    devmachine_claude_code_legacy_npm_package_path: "{{ devmachine_claude_code_home }}/.local/lib/node_modules/@anthropic-ai/claude-code"
+    devmachine_claude_code_prerequisite_packages:
+      - ca-certificates
+      - curl
+    devmachine_claude_code_packages:
+      - git
+      - ripgrep
+    devmachine_claude_code_architecture_map:
+      amd64: x64
+      x86_64: x64
+      aarch64: arm64
+      arm64: arm64
+
+  tasks:
+    - name: Assert target uses supported Linux platform
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+          - ansible_architecture in devmachine_claude_code_architecture_map
+        fail_msg: "Claude Code official Linux releases require Debian/Ubuntu on x86_64 or arm64."
+
+    - name: Assert Claude Code version target is valid
+      ansible.builtin.assert:
+        that:
+          - devmachine_claude_code_version is match('^(stable|latest|[0-9]+\\.[0-9]+\\.[0-9]+(-\\S+)?)$')
+        fail_msg: "devmachine_claude_code_version must be stable, latest, or an explicit version such as 2.1.175."
+
+    - name: Install Claude Code prerequisites
+      ansible.builtin.apt:
+        name: "{{ devmachine_claude_code_prerequisite_packages + devmachine_claude_code_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Read Claude Code user account information
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ devmachine_claude_code_user }}"
+
+    - name: Resolve Claude Code user home
+      ansible.builtin.set_fact:
+        devmachine_claude_code_home: "{{ ansible_facts.getent_passwd[devmachine_claude_code_user][4] }}"
+
+    - name: Resolve Claude Code user primary group
+      ansible.builtin.command:
+        argv:
+          - id
+          - -gn
+          - "{{ devmachine_claude_code_user }}"
+      register: devmachine_claude_code_primary_group
+      changed_when: false
+
+    - name: Ensure Claude Code user directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ devmachine_claude_code_user }}"
+        group: "{{ devmachine_claude_code_primary_group.stdout }}"
+        mode: "0755"
+      loop:
+        - "{{ devmachine_claude_code_home }}/.local"
+        - "{{ devmachine_claude_code_home }}/.local/bin"
+        - "{{ devmachine_claude_code_home }}/.claude"
+        - "{{ devmachine_claude_code_home }}/.claude/downloads"
+
+    - name: Resolve Claude Code platform
+      ansible.builtin.set_fact:
+        devmachine_claude_code_platform: "linux-{{ devmachine_claude_code_architecture_map[ansible_architecture] }}"
+
+    - name: Resolve desired Claude Code release version
+      ansible.builtin.uri:
+        url: "{{ devmachine_claude_code_release_base_url }}/{{ devmachine_claude_code_version }}"
+        return_content: true
+      register: devmachine_claude_code_resolved_release
+      changed_when: false
+      when: devmachine_claude_code_version in ["latest", "stable"]
+
+    - name: Set desired Claude Code version
+      ansible.builtin.set_fact:
+        devmachine_claude_code_desired_version: >-
+          {{
+            (devmachine_claude_code_resolved_release.content | trim)
+            if devmachine_claude_code_version in ["latest", "stable"]
+            else devmachine_claude_code_version
+          }}
+
+    - name: Read Claude Code release manifest
+      ansible.builtin.uri:
+        url: "{{ devmachine_claude_code_release_base_url }}/{{ devmachine_claude_code_desired_version }}/manifest.json"
+        return_content: true
+      register: devmachine_claude_code_release_manifest_response
+      changed_when: false
+
+    - name: Resolve Claude Code release metadata
+      ansible.builtin.set_fact:
+        devmachine_claude_code_release_manifest: "{{ devmachine_claude_code_release_manifest_response.content | from_json }}"
+
+    - name: Assert Claude Code platform exists in release manifest
+      ansible.builtin.assert:
+        that:
+          - devmachine_claude_code_platform in devmachine_claude_code_release_manifest.platforms
+        fail_msg: "Claude Code release {{ devmachine_claude_code_desired_version }} does not provide {{ devmachine_claude_code_platform }}."
+
+    - name: Check deprecated npm Claude Code package
+      ansible.builtin.stat:
+        path: "{{ devmachine_claude_code_legacy_npm_package_path }}"
+      register: devmachine_claude_code_legacy_npm_package
+
+    - name: Remove deprecated npm Claude Code launcher
+      ansible.builtin.file:
+        path: "{{ devmachine_claude_code_binary_path }}"
+        state: absent
+      when: devmachine_claude_code_legacy_npm_package.stat.exists
+
+    - name: Install Claude Code CLI binary
+      ansible.builtin.get_url:
+        url: "{{ devmachine_claude_code_release_base_url }}/{{ devmachine_claude_code_desired_version }}/{{ devmachine_claude_code_platform }}/claude"
+        dest: "{{ devmachine_claude_code_binary_path }}"
+        checksum: "sha256:{{ devmachine_claude_code_release_manifest.platforms[devmachine_claude_code_platform].checksum }}"
+        owner: "{{ devmachine_claude_code_user }}"
+        group: "{{ devmachine_claude_code_primary_group.stdout }}"
+        mode: "0755"
+        timeout: 600
+
+    - name: Configure Claude Code PATH in user shells
+      ansible.builtin.blockinfile:
+        path: "{{ item }}"
+        create: true
+        owner: "{{ devmachine_claude_code_user }}"
+        group: "{{ devmachine_claude_code_primary_group.stdout }}"
+        mode: "0644"
+        marker: "# {mark} ANSIBLE MANAGED CLAUDE CODE PATH"
+        block: |
+          if [ -d "$HOME/.local/bin" ]; then
+            case ":$PATH:" in
+              *":$HOME/.local/bin:"*) ;;
+              *) export PATH="$HOME/.local/bin:$PATH" ;;
+            esac
+          fi
+      loop:
+        - "{{ devmachine_claude_code_home }}/.profile"
+        - "{{ devmachine_claude_code_home }}/.bashrc"
+        - "{{ devmachine_claude_code_home }}/.zshrc"
+      when: devmachine_claude_code_configure_shell_path
+
+    - name: Ensure /usr/local/bin exists
+      ansible.builtin.file:
+        path: "{{ devmachine_claude_code_global_binary_path | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: devmachine_claude_code_create_global_launcher
+
+    - name: Expose Claude Code CLI globally
+      ansible.builtin.file:
+        src: "{{ devmachine_claude_code_binary_path }}"
+        dest: "{{ devmachine_claude_code_global_binary_path }}"
+        state: link
+        owner: root
+        group: root
+        follow: false
+        force: true
+      when: devmachine_claude_code_create_global_launcher
+
+    - name: Verify Claude Code CLI
+      ansible.builtin.command:
+        argv:
+          - "{{ devmachine_claude_code_global_binary_path if devmachine_claude_code_create_global_launcher else devmachine_claude_code_binary_path }}"
+          - --version
+      become: true
+      become_user: "{{ devmachine_claude_code_user }}"
+      environment:
+        HOME: "{{ devmachine_claude_code_home }}"
+        PATH: "{{ devmachine_claude_code_home }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+      register: devmachine_claude_code_cli_version
+      changed_when: false
+
+    - name: Resolve Claude Code launcher target
+      ansible.builtin.command:
+        argv:
+          - readlink
+          - -f
+          - "{{ devmachine_claude_code_binary_path }}"
+      register: devmachine_claude_code_launcher_target
+      changed_when: false
+      when: devmachine_claude_code_legacy_npm_package.stat.exists
+
+    - name: Assert Claude Code launcher is not the deprecated npm package
+      ansible.builtin.assert:
+        that:
+          - devmachine_claude_code_launcher_target.stdout is not search(devmachine_claude_code_legacy_npm_package_path | regex_escape)
+        fail_msg: "Claude Code still points to the deprecated npm package after running the official installer."
+      when: devmachine_claude_code_legacy_npm_package.stat.exists
+
+    - name: Remove deprecated npm Claude Code package
+      ansible.builtin.file:
+        path: "{{ devmachine_claude_code_legacy_npm_package_path }}"
+        state: absent
+      when: devmachine_claude_code_legacy_npm_package.stat.exists
+
+    - name: Report Claude Code Desktop Linux support
+      ansible.builtin.debug:
+        msg: "Claude Code Desktop is not installed: Anthropic currently supports the desktop app on macOS and Windows only. Linux hosts should use the CLI."
+      when: devmachine_claude_code_install_desktop
+
+    - name: Assert Claude Code CLI is installed
+      ansible.builtin.assert:
+        that:
+          - devmachine_claude_code_cli_version.rc == 0
+          - devmachine_claude_code_cli_version.stdout | length > 0
+          - devmachine_claude_code_cli_version.stdout is search(devmachine_claude_code_desired_version | regex_escape)
+        fail_msg: "Claude Code CLI is not installed correctly."
+        success_msg: "Claude Code CLI is installed."
