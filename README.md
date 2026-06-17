@@ -38,6 +38,8 @@ cas d'utilisation avec sudo
 ansible-playbook -i inventory.yaml playbooks/update/playbook.yaml --ask-become-pass
 ```
 
+Le playbook `playbooks/update/playbook.yaml` exécute explicitement `apt update`, puis `apt upgrade`.
+
 Cas d'utilisation depuis le poste cible lui-même, après installation des paquets de base :
 
 ```sh
@@ -108,7 +110,7 @@ Le playbook `playbooks/base-packages/playbook.yaml` installe les utilitaires com
 - terminator
 - net-tools
 
-Zsh, Google Chrome et Clipboard Indicator restent dans leurs playbooks dédiés pour garder les responsabilités séparées.
+Zsh, Google Chrome, Clipboard Indicator et Caffeine restent dans leurs playbooks dédiés pour garder les responsabilités séparées.
 
 Ajouter des paquets au cas par cas :
 
@@ -343,6 +345,16 @@ Après installation, authentifier le compte GitHub depuis la session de l'utilis
 gh auth login
 ```
 
+## Cato
+
+Le playbook `playbooks/cato/playbook.yaml` installe le client Cato depuis le paquet Debian officiel, vérifie que `cato-sdp` est disponible, puis exécute la mise à jour avec `cato-sdp update`.
+
+Installer ou mettre à jour Cato seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/cato/playbook.yaml --ask-become-pass
+```
+
 ## MongoDB
 
 Le playbook `playbooks/mongodb-compass/playbook.yaml` installe MongoDB Compass via le paquet Debian officiel fourni par MongoDB.
@@ -381,6 +393,20 @@ Installer l'extension seule :
 
 ```sh
 ansible-playbook -i inventory.yaml playbooks/gnome-clipboard-indicator/playbook.yaml --ask-become-pass
+```
+
+## GNOME Caffeine
+
+Le playbook `playbooks/gnome-caffeine/playbook.yaml` installe l'extension GNOME Shell Caffeine depuis GitHub dans le profil utilisateur.
+
+Par défaut, l'extension cible `devmachine_end_user` si la variable est renseignée, sinon `ansible_user`. Il est possible de forcer le compte cible avec `devmachine_gnome_extensions_user`.
+
+Le playbook détecte la version majeure de GNOME Shell et choisit la branche compatible du dépôt quand elle est connue. Il est possible de forcer la branche avec `devmachine_gnome_caffeine_version`.
+
+Installer l'extension seule :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/gnome-caffeine/playbook.yaml --ask-become-pass
 ```
 
 ## Keeper
@@ -471,6 +497,7 @@ ansible-playbook -i inventory.yaml packages/infra.yaml --ask-become-pass
 - keyd
 - zsh
 - gnome-clipboard-indicator
+- gnome-caffeine
 - keeper
 - slack
 - google-chrome

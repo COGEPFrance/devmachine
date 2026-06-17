@@ -1,4 +1,4 @@
-- name: Install Cato Client
+- name: Install and update Cato Client
   hosts: devs
   become: true
   vars:
@@ -21,3 +21,9 @@
         cmd: cato-sdp version
       register: cato_sdp_version
       changed_when: false
+
+    - name: Update Cato Client
+      ansible.builtin.command:
+        cmd: cato-sdp update
+      register: cato_sdp_update
+      changed_when: true
