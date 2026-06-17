@@ -14,6 +14,8 @@
   import_playbook: ../playbooks/zsh/playbook.yaml
 - name: Install GNOME Clipboard Indicator
   import_playbook: ../playbooks/gnome-clipboard-indicator/playbook.yaml
+- name: Install GNOME Caffeine
+  import_playbook: ../playbooks/gnome-caffeine/playbook.yaml
 - name: Install Keeper Password Manager
   import_playbook: ../playbooks/keeper/playbook.yaml
 - name: Install Slack
