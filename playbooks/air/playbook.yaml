@@ -1,0 +1,247 @@
+- name: Install JetBrains Air
+  hosts: devs
+  become: true
+  vars:
+    devmachine_air_product_code: AIR
+    devmachine_air_release_type: preview
+    devmachine_air_releases_url: >-
+      https://data.services.jetbrains.com/products/releases?code={{ devmachine_air_product_code
+      }}&type={{ devmachine_air_release_type }}&latest=true
+    devmachine_air_install_root: /opt/jetbrains-air
+    devmachine_air_current_path: "{{ devmachine_air_install_root }}/current"
+    devmachine_air_launcher_path: /usr/local/bin/air
+    devmachine_air_desktop_path: /usr/share/applications/jetbrains-air.desktop
+    devmachine_air_app_link_path: "{{ devmachine_air_current_path }}/app"
+    devmachine_air_lib_app_path: "{{ devmachine_air_current_path }}/lib/app"
+    devmachine_air_architecture_map:
+      x86_64: linux_x64
+      amd64: linux_x64
+      aarch64: linux_aarch64
+      arm64: linux_aarch64
+    devmachine_air_prerequisite_packages:
+      - ca-certificates
+      - dbus-user-session
+      - desktop-file-utils
+      - libfontconfig1
+      - libgtk-3-0
+      - libgtk-3-bin
+      - libxi6
+      - libxrender1
+      - libxtst6
+      - tar
+
+  tasks:
+    - name: Assert target uses supported Linux platform
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+          - ansible_architecture in devmachine_air_architecture_map
+        fail_msg: "JetBrains Air Linux archives require Debian/Ubuntu on x86_64 or arm64."
+
+    - name: Install JetBrains Air prerequisites
+      ansible.builtin.apt:
+        name: "{{ devmachine_air_prerequisite_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Read JetBrains Air release metadata
+      ansible.builtin.uri:
+        url: "{{ devmachine_air_releases_url }}"
+        return_content: true
+      register: devmachine_air_releases_response
+      changed_when: false
+
+    - name: Resolve JetBrains Air release metadata
+      ansible.builtin.set_fact:
+        devmachine_air_releases: "{{ devmachine_air_releases_response.content | from_json }}"
+        devmachine_air_platform: "{{ devmachine_air_architecture_map[ansible_architecture] }}"
+
+    - name: Assert JetBrains Air release exists
+      ansible.builtin.assert:
+        that:
+          - devmachine_air_product_code in devmachine_air_releases
+          - devmachine_air_releases[devmachine_air_product_code] | length > 0
+        fail_msg: "No JetBrains Air preview release was found in JetBrains product metadata."
+
+    - name: Resolve JetBrains Air latest preview
+      ansible.builtin.set_fact:
+        devmachine_air_release: "{{ devmachine_air_releases[devmachine_air_product_code][0] }}"
+
+    - name: Assert JetBrains Air platform archive exists
+      ansible.builtin.assert:
+        that:
+          - devmachine_air_platform in devmachine_air_release.downloads
+          - devmachine_air_release.downloads[devmachine_air_platform].link | length > 0
+          - devmachine_air_release.downloads[devmachine_air_platform].checksumLink | length > 0
+        fail_msg: "JetBrains Air {{ devmachine_air_release.build }} does not provide {{ devmachine_air_platform }}."
+
+    - name: Resolve JetBrains Air archive paths
+      ansible.builtin.set_fact:
+        devmachine_air_download: "{{ devmachine_air_release.downloads[devmachine_air_platform] }}"
+        devmachine_air_release_dir: "{{ devmachine_air_install_root }}/{{ devmachine_air_release.build }}"
+        devmachine_air_bootstrap_jar_path: >-
+          {{ devmachine_air_install_root }}/{{ devmachine_air_release.build }}/lib/app/fleet.dock.bootstrap-{{
+          devmachine_air_release.build }}.jar
+
+    - name: Resolve JetBrains Air archive filename
+      ansible.builtin.set_fact:
+        devmachine_air_archive_path: "/tmp/{{ devmachine_air_download.link | basename }}"
+
+    - name: Ensure JetBrains Air install root exists
+      ansible.builtin.file:
+        path: "{{ devmachine_air_install_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download JetBrains Air archive
+      ansible.builtin.get_url:
+        url: "{{ devmachine_air_download.link }}"
+        dest: "{{ devmachine_air_archive_path }}"
+        checksum: "sha256:{{ devmachine_air_download.checksumLink }}"
+        mode: "0644"
+        timeout: 900
+
+    - name: Ensure JetBrains Air release directory exists
+      ansible.builtin.file:
+        path: "{{ devmachine_air_release_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Extract JetBrains Air archive
+      ansible.builtin.unarchive:
+        src: "{{ devmachine_air_archive_path }}"
+        dest: "{{ devmachine_air_release_dir }}"
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+        creates: "{{ devmachine_air_bootstrap_jar_path }}"
+
+    - name: Ensure JetBrains Air launcher is executable
+      ansible.builtin.file:
+        path: "{{ devmachine_air_release_dir }}/bin/Air"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure JetBrains Air directories are traversable
+      ansible.builtin.command:
+        argv:
+          - find
+          - "{{ devmachine_air_release_dir }}"
+          - -type
+          - d
+          - -exec
+          - chmod
+          - "0755"
+          - "{}"
+          - +
+      changed_when: false
+
+    - name: Ensure JetBrains Air files are readable
+      ansible.builtin.command:
+        argv:
+          - find
+          - "{{ devmachine_air_release_dir }}"
+          - -type
+          - f
+          - -exec
+          - chmod
+          - u=rwX,go=rX
+          - "{}"
+          - +
+      changed_when: false
+
+    - name: Point JetBrains Air current symlink to latest preview
+      ansible.builtin.file:
+        src: "{{ devmachine_air_release_dir }}"
+        dest: "{{ devmachine_air_current_path }}"
+        state: link
+        owner: root
+        group: root
+        follow: false
+        force: true
+
+    - name: Link JetBrains Air app classpath directory
+      ansible.builtin.file:
+        src: "{{ devmachine_air_lib_app_path }}"
+        dest: "{{ devmachine_air_app_link_path }}"
+        state: link
+        owner: root
+        group: root
+        follow: false
+        force: true
+
+    - name: Install JetBrains Air command launcher
+      ansible.builtin.copy:
+        dest: "{{ devmachine_air_launcher_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exec {{ devmachine_air_current_path }}/bin/Air "$@"
+
+    - name: Install JetBrains Air desktop entry
+      ansible.builtin.copy:
+        dest: "{{ devmachine_air_desktop_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=JetBrains Air
+          Comment=Agentic Development Environment
+          Exec={{ devmachine_air_launcher_path }} %f
+          Icon=jetbrains-air
+          Terminal=false
+          Categories=Development;IDE;
+          StartupWMClass=jetbrains-air
+
+    - name: Update desktop application database
+      ansible.builtin.command:
+        cmd: update-desktop-database /usr/share/applications
+      changed_when: false
+
+    - name: Read JetBrains Air product metadata
+      ansible.builtin.slurp:
+        src: "{{ devmachine_air_current_path }}/product-info.json"
+      register: devmachine_air_product_info_raw
+
+    - name: Resolve JetBrains Air installed product metadata
+      ansible.builtin.set_fact:
+        devmachine_air_product_info: "{{ devmachine_air_product_info_raw.content | b64decode | from_json }}"
+
+    - name: Check JetBrains Air command launcher
+      ansible.builtin.stat:
+        path: "{{ devmachine_air_launcher_path }}"
+      register: devmachine_air_launcher_stat
+
+    - name: Check JetBrains Air bootstrap jar
+      ansible.builtin.stat:
+        path: "{{ devmachine_air_bootstrap_jar_path }}"
+      register: devmachine_air_bootstrap_jar_stat
+
+    - name: Check JetBrains Air app classpath link
+      ansible.builtin.stat:
+        path: "{{ devmachine_air_app_link_path }}"
+        follow: true
+      register: devmachine_air_app_link_stat
+
+    - name: Assert JetBrains Air is installed
+      ansible.builtin.assert:
+        that:
+          - devmachine_air_product_info.productCode == devmachine_air_product_code
+          - devmachine_air_product_info.buildNumber == devmachine_air_release.build
+          - devmachine_air_bootstrap_jar_stat.stat.exists
+          - devmachine_air_app_link_stat.stat.exists
+          - devmachine_air_app_link_stat.stat.isdir
+          - devmachine_air_launcher_stat.stat.exists
+          - devmachine_air_launcher_stat.stat.executable
+        fail_msg: "JetBrains Air {{ devmachine_air_release.build }} is not installed correctly."
+        success_msg: "JetBrains Air {{ devmachine_air_release.build }} is installed."
