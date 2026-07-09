@@ -569,11 +569,18 @@ ansible-playbook -i inventory.yaml packages/dev.yaml --ask-become-pass
 
 ### Full JetBrains
 
+- air
 - datagrip
 - dataspell
 - phpstorm
 - webstorm
 - pycharm
+
+Installer JetBrains Air seul :
+
+```sh
+ansible-playbook -i inventory.yaml playbooks/air/playbook.yaml --ask-become-pass
+```
 
 ```sh
 ansible-playbook -i inventory.yaml packages/full-jetbrains.yaml --ask-become-pass
